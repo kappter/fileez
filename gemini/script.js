@@ -435,10 +435,14 @@ fileInput.addEventListener('change', (event) => {
         scrubToolSection.classList.add('hidden');
         dataDisplaySection.classList.add('hidden');
         encryptionSection.classList.add('hidden'); // Hide encryption section
+        loadingIndicator.classList.add('hidden'); // Hide loading indicator if no file selected
         currentFileBuffer = null;
         renderGraphicalView(null); // Clear canvas
         return;
     }
+
+    // Show loading indicator immediately
+    loadingIndicator.classList.remove('hidden');
 
     if (file.size > MAX_FILE_SIZE) {
         fileError.textContent = `File size exceeds the 100KB limit. Please select a smaller file. (Current: ${Math.round(file.size / 1024)} KB)`;
@@ -448,6 +452,7 @@ fileInput.addEventListener('change', (event) => {
         scrubToolSection.classList.add('hidden');
         dataDisplaySection.classList.add('hidden');
         encryptionSection.classList.add('hidden'); // Hide encryption section
+        loadingIndicator.classList.add('hidden'); // Hide loading indicator on error
         currentFileBuffer = null;
         renderGraphicalView(null); // Clear canvas
         return;
@@ -496,11 +501,14 @@ fileInput.addEventListener('change', (event) => {
         renderFileData(); // Initial render
         cipherOutput.value = ''; // Clear cipher output on new file load
         cipherError.textContent = '';
+
+        loadingIndicator.classList.add('hidden'); // Hide loading indicator after successful load
     };
     reader.onerror = () => {
         fileError.textContent = 'Failed to read file.';
         currentFileBuffer = null;
         renderGraphicalView(null); // Clear canvas
+        loadingIndicator.classList.add('hidden'); // Hide loading indicator on error
     };
     reader.readAsArrayBuffer(file);
 });
@@ -718,6 +726,7 @@ graphicalViewSection.classList.add('hidden'); // Ensure graphical view section i
 scrubToolSection.classList.add('hidden');
 dataDisplaySection.classList.add('hidden');
 encryptionSection.classList.add('hidden'); // Ensure encryption section is hidden initially
+loadingIndicator.classList.add('hidden'); // Ensure loading indicator is hidden initially
 
 // Handle canvas resizing (optional, but good for responsiveness)
 window.addEventListener('resize', () => {
