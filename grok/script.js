@@ -50,6 +50,15 @@ themeToggle.addEventListener('click', () => {
   applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
 });
 
+// Synchronized scrolling for hex and ASCII viewers
+hexViewer.addEventListener('scroll', () => {
+  asciiViewer.scrollTop = hexViewer.scrollTop; // Sync vertical scroll
+});
+
+asciiViewer.addEventListener('scroll', () => {
+  hexViewer.scrollTop = asciiViewer.scrollTop; // Sync vertical scroll
+});
+
 // Modal toggle
 function showModal(title, content) {
   modalTitle.textContent = title;
@@ -109,7 +118,7 @@ fileInput.addEventListener('change', async (e) => {
     fileNameRanges = sectionRanges.filter(r => r.name === 'File Name' && r.range).map(r => r.range);
 
     // Display graphical view
-    drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, fileNameRanges);
+    drawFileSvg(fileBuffer, sensitiveRanges, fileNameRanges, headerRanges);
     // Display hex and ASCII data with sensitive and file name highlights
     displayHex(fileBuffer, sensitiveRanges, fileNameRanges);
     // Display metadata
@@ -140,7 +149,7 @@ fileSvg.addEventListener('click', (e) => {
     scrubberPos.textContent = `Position: ${byteIndex}`;
     highlightHexPosition(byteIndex);
     showByteTooltip(e, byteIndex);
-    drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, fileNameRanges, byteIndex);
+    drawFileSvg(fileBuffer, sensitiveRanges, fileNameRanges, headerRanges, byteIndex);
   }
 });
 
@@ -168,7 +177,7 @@ saveHex.addEventListener('click', () => {
     return;
   }
   fileBuffer = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-  drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, fileNameRanges);
+  drawFileSvg(fileBuffer, sensitiveRanges, fileNameRanges, headerRanges);
   displayHex(fileBuffer, sensitiveRanges, fileNameRanges);
   clearError();
 });
@@ -178,7 +187,7 @@ scrubber.addEventListener('input', () => {
   const pos = parseInt(scrubber.value);
   scrubberPos.textContent = `Position: ${pos}`;
   highlightHexPosition(pos);
-  drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, fileNameRanges, pos);
+  drawFileSvg(fileBuffer, sensitiveRanges, fileNameRanges, headerRanges, pos);
 });
 
 // Encryption handler
@@ -572,7 +581,7 @@ async function parseDocxMetadata(file, buffer) {
         created: xml.querySelector('created')?.textContent,
         modified: xml.querySelector('modified')?.textContent
       };
-      return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: UTF-8 (XML)<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.modified || 'N/A'}<br>Note: File name may be stored in docProps/core.xml (bytes 0-500, highlighted in orange in Hex Viewer).`;
+      return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: UTF-8 (XML)<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.created || 'N/A'}<br>Note: File name may be stored in docProps/core.xml (bytes 0-500, highlighted in orange in Hex Viewer).`;
     }
     return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: N/A<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No detailed metadata available.<br>Note: File name and extension are stored in the file system.`;
   } catch (e) {
