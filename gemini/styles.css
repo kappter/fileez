@@ -40,6 +40,16 @@ body {
     font-weight: bold;
 }
 
+/* New style for highlighting selected hex byte in the hex data display */
+.highlighted-hex-byte {
+    background-color: #FCD34D; /* Tailwind amber-300 */
+    color: #4B5563; /* Tailwind gray-700 */
+    font-weight: bold;
+    border: 1px solid #D97706; /* Tailwind amber-700 */
+    border-radius: 4px;
+}
+
+
 /* Modal styling */
 .modal-overlay {
     position: fixed;
