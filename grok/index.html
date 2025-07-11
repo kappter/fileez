@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -55,8 +16,16 @@
     <p id="error" class="text-red-500 hidden"></p>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- Hex Viewer/Editor -->
+      <!-- Graphical View and Hex Viewer -->
       <div>
+        <h2 class="text-xl font-semibold mb-2">Graphical View</h2>
+        <canvas id="fileCanvas" class="w-full border rounded mb-2"></canvas>
+        <div class="text-sm mb-2">
+          <p><span class="inline-block w-4 h-4 bg-yellow-200"></span> Metadata (Potentially Sensitive)</p>
+          <p><span class="inline-block w-4 h-4 bg-blue-200"></span> File System/Headers</p>
+          <p><span class="inline-block w-4 h-4 bg-green-200"></span> Content</p>
+          <p><span class="inline-block w-4 h-4 bg-gray-200"></span> Unknown/Other</p>
+        </div>
         <h2 class="text-xl font-semibold mb-2">Hex Viewer (Sensitive Data Highlighted)</h2>
         <div id="hexViewer" class="w-full h-64 p-2 border rounded font-mono text-sm overflow-auto" contenteditable="true"></div>
         <button id="saveHex" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Save Hex Changes</button>
@@ -95,6 +64,7 @@
 
   <script>
     const fileInput = document.getElementById('fileInput');
+    const fileCanvas = document.getElementById('fileCanvas');
     const hexViewer = document.getElementById('hexViewer');
     const saveHex = document.getElementById('saveHex');
     const metadata = document.getElementById('metadata');
@@ -110,17 +80,18 @@
     const MAX_FILE_SIZE = 1024 * 1024; // 1MB
     let fileBuffer = null;
     let sensitiveRanges = [];
+    let headerRanges = [];
 
     // Supported file types and their magic numbers
     const fileSignatures = {
-      'txt': { signature: null, metadata: parseTextMetadata, sensitive: parseTextSensitive },
-      'jpg': { signature: [0xFF, 0xD8], metadata: parseImageMetadata, sensitive: parseImageSensitive },
-      'jpeg': { signature: [0xFF, 0xD8], metadata: parseImageMetadata, sensitive: parseImageSensitive },
-      'png': { signature: [0x89, 0x50, 0x4E, 0x47], metadata: parseImageMetadata, sensitive: parseImageSensitive },
-      'docx': { signature: [0x50, 0x4B, 0x03, 0x04], metadata: parseDocxMetadata, sensitive: parseDocxSensitive },
-      'mp3': { signature: [0x49, 0x44, 0x33], metadata: parseMp3Metadata, sensitive: parseMp3Sensitive },
-      'pdf': { signature: [0x25, 0x50, 0x44, 0x46], metadata: parseGenericMetadata, sensitive: parseGenericSensitive },
-      'mp4': { signature: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], metadata: parseGenericMetadata, sensitive: parseGenericSensitive }
+      'txt': { signature: null, metadata: parseTextMetadata, sensitive: parseTextSensitive, headers: parseTextHeaders },
+      'jpg': { signature: [0xFF, 0xD8], metadata: parseImageMetadata, sensitive: parseImageSensitive, headers: parseImageHeaders },
+      'jpeg': { signature: [0xFF, 0xD8], metadata: parseImageMetadata, sensitive: parseImageSensitive, headers: parseImageHeaders },
+      'png': { signature: [0x89, 0x50, 0x4E, 0x47], metadata: parseImageMetadata, sensitive: parseImageSensitive, headers: parseImageHeaders },
+      'docx': { signature: [0x50, 0x4B, 0x03, 0x04], metadata: parseDocxMetadata, sensitive: parseDocxSensitive, headers: parseDocxHeaders },
+      'mp3': { signature: [0x49, 0x44, 0x33], metadata: parseMp3Metadata, sensitive: parseMp m3Sensitive, headers: parseMp3Headers },
+      'pdf': { signature: [0x25, 0x50, 0x44, 0x46], metadata: parseGenericMetadata, sensitive: parseGenericSensitive, headers: parsePdfHeaders },
+      'mp4': { signature: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], metadata: parseGenericMetadata, sensitive: parseGenericSensitive, headers: parseMp4Headers }
     };
 
     // File input handler
@@ -146,8 +117,12 @@
         return;
       }
 
-      // Display hex data with sensitive highlights
+      // Get sensitive and header ranges
       sensitiveRanges = await fileSignatures[ext].sensitive(file, fileBuffer);
+      headerRanges = await fileSignatures[ext].headers(file, fileBuffer);
+      // Display graphical view
+      drawFileCanvas(fileBuffer, sensitiveRanges, headerRanges);
+      // Display hex data with sensitive highlights
       displayHex(fileBuffer, sensitiveRanges);
       // Display metadata
       const metadataText = await fileSignatures[ext].metadata(file, fileBuffer);
@@ -161,6 +136,17 @@
       clearError();
     });
 
+    // Canvas click handler
+    fileCanvas.addEventListener('click', (e) => {
+      const rect = fileCanvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const byteIndex = Math.floor(x / (fileCanvas.width / fileBuffer.length));
+      scrubber.value = byteIndex;
+      scrubberPos.textContent = `Position: ${byteIndex}`;
+      highlightHexPosition(byteIndex);
+      drawFileCanvas(fileBuffer, sensitiveRanges, headerRanges, byteIndex);
+    });
+
     // Save hex changes
     saveHex.addEventListener('click', () => {
       const hex = hexViewer.textContent.replace(/\s/g, '');
@@ -169,6 +155,7 @@
         return;
       }
       fileBuffer = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+      drawFileCanvas(fileBuffer, sensitiveRanges, headerRanges);
       displayHex(fileBuffer, sensitiveRanges);
       clearError();
     });
@@ -178,6 +165,7 @@
       const pos = parseInt(scrubber.value);
       scrubberPos.textContent = `Position: ${pos}`;
       highlightHexPosition(pos);
+      drawFileCanvas(fileBuffer, sensitiveRanges, headerRanges, pos);
     });
 
     // Encryption handler
@@ -213,6 +201,36 @@
       displayEncryptedHex(decrypted);
       clearError();
     });
+
+    // Draw file on canvas
+    function drawFileCanvas(buffer, sensitiveRanges, headerRanges, highlightPos = -1) {
+      const ctx = fileCanvas.getContext('2d');
+      const width = Math.min(800, buffer.length);
+      const height = 20;
+      fileCanvas.width = width;
+      fileCanvas.height = height;
+      const pixelWidth = width / buffer.length;
+
+      for (let i = 0; i < buffer.length; i++) {
+        let color = 'rgb(200, 200, 200)'; // Unknown/Other (Gray)
+        if (headerRanges.some(([start, end]) => i >= start && i <= end)) {
+          color = 'rgb(173, 216, 230)'; // File System/Headers (Blue)
+        } else if (sensitiveRanges.some(([start, end]) => i >= start && i <= end)) {
+          color = 'rgb(255, 255, 224)'; // Metadata (Yellow)
+        } else {
+          color = 'rgb(144, 238, 144)'; // Content (Green)
+        }
+        ctx.fillStyle = color;
+        ctx.fillRect(i * pixelWidth, 0, pixelWidth, height);
+      }
+
+      // Draw highlight for current position
+      if (highlightPos >= 0 && highlightPos < buffer.length) {
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(highlightPos * pixelWidth, 0, pixelWidth, height);
+      }
+    }
 
     // Display hex data with highlights
     function displayHex(buffer, ranges) {
@@ -268,7 +286,7 @@
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.onload = () => {
-          resolve(`File Name: ⚠️ ${file.name}\nSize: ${file.size} bytes\nType: text/plain\nSample Content: ${reader.result.slice(0, 100)}...`);
+          resolve(`File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: text/plain<br>Sample Content: ${reader.result.slice(0, 100)}...`);
         };
         reader.readAsText(file);
       });
@@ -276,7 +294,12 @@
 
     // Parse text sensitive ranges
     function parseTextSensitive(file) {
-      return Promise.resolve([]); // Text files have no specific sensitive ranges
+      return Promise.resolve([]); // No specific sensitive ranges
+    }
+
+    // Parse text headers
+    function parseTextHeaders(file) {
+      return Promise.resolve([]); // No headers for text
     }
 
     // Parse image metadata
@@ -287,7 +310,7 @@
           const metadata = [`File Name: ⚠️ ${file.name}`, `Size: ${file.size} bytes`, `Type: ${file.type}`];
           for (let tag in exifData) {
             const isSensitive = ['GPSLatitude', 'GPSLongitude', 'DateTime', 'Model'].includes(tag);
-            metadata.push(`${isSensitive ? '⚠️ ' : ''}${tag}: ${exifData[tag]}`);
+            metadata.push(`${isSensitive ? '⚠️ ' : ''}${tag}: ${exifData[tagbq]}`);
           }
           resolve(metadata.join('<br>') || 'No EXIF data available.');
         });
@@ -298,18 +321,21 @@
     function parseImageSensitive(file, buffer) {
       return new Promise((resolve) => {
         window.EXIF.getData(file, function() {
-          const exifData = window.EXIF.getAllTags(this);
-          // Approximate EXIF data location (after APP1 marker FF E1)
           const ranges = [];
           for (let i = 0; i < buffer.length - 1; i++) {
             if (buffer[i] === 0xFF && buffer[i + 1] === 0xE1) {
-              ranges.push([i, i + 100]); // Approximate range
+              ranges.push([i, i + 100]); // Approximate EXIF range
               break;
             }
           }
           resolve(ranges);
         });
       });
+    }
+
+    // Parse image headers
+    function parseImageHeaders(file, buffer) {
+      return Promise.resolve([[0, 8]]); // First 8 bytes for magic numbers
     }
 
     // Parse docx metadata
@@ -340,13 +366,17 @@
         const zip = await JSZip.loadAsync(buffer);
         const docProps = await zip.file('docProps/core.xml')?.async('string');
         if (docProps) {
-          // Approximate docProps/core.xml location in ZIP
-          return [[0, 500]]; // First 500 bytes for ZIP headers
+          return [[0, 500]]; // First 500 bytes for ZIP headers and metadata
         }
         return [];
       } catch (e) {
         return [];
       }
+    }
+
+    // Parse docx headers
+    async function parseDocxHeaders(file, buffer) {
+      return [[0, 30]]; // ZIP file header
     }
 
     // Parse mp3 metadata
@@ -369,6 +399,11 @@
       return [];
     }
 
+    // Parse mp3 headers
+    function parseMp3Headers(file, buffer) {
+      return [[0, 10]]; // ID3 header
+    }
+
     // Parse generic metadata
     function parseGenericMetadata(file) {
       return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No specific metadata parser available.`;
@@ -376,7 +411,17 @@
 
     // Parse generic sensitive ranges
     function parseGenericSensitive(file) {
-      return Promise.resolve([]); // No specific sensitive ranges
+      return Promise.resolve([]);
+    }
+
+    // Parse PDF headers
+    function parsePdfHeaders(file, buffer) {
+      return [[0, 8]]; // PDF magic number
+    }
+
+    // Parse MP4 headers
+    function parseMp4Headers(file, buffer) {
+      return [[0, 8]]; // MP4 ftyp box
     }
 
     // Encrypt data
