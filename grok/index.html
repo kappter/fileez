@@ -51,25 +51,18 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='gray'/><rect x='4' y='4' width='8' height='8' fill='blue'/></svg>">
   <link href="./styles.css" rel="stylesheet">
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col pt-20">
-  <header class="bg-white dark:bg-gray-800 shadow p-4 flex justify-between items-center fixed top-0 w-full z-20">
-    <h1 class="text-2xl font-bold">File Analysis Tool</h1>
-    <button id="themeToggle" class="p-2 rounded focus:outline-none">
-      <svg id="themeIcon" class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-        <path id="sunIcon" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 11-2 0 1 1 0 012 0zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 11-2 0 1 1 0 012 0zm-1-7a1 1 0 011-1h1a1 1 0 110 2H3a1 1 0 01-1-1zm12 0a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1z"></path>
-        <path id="moonIcon" class="hidden" fill-rule="evenodd" d="M6.258 3.605a7 7 0 1110.237 9.79A7 7 0 016.258 3.605zm.847 1.404a5 5 0 107.287 7.287A5 5 0 007.105 5.01z" clip-rule="evenodd"></path>
-      </svg>
-    </button>
-  </header>
-  <div id="hexViewerContainer" class="fixed top-16 left-0 right-0 bg-white dark:bg-gray-800 shadow p-4 z-10">
-    <h2 class="text-lg font-semibold mb-2">Hex Viewer</h2>
-    <div class="flex">
-      <div id="hexViewer" class="overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm flex-1"></div>
-      <div id="asciiViewer" class="overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm w-1/4"></div>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
+  <main class="flex-grow max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+    <!-- Title and Theme Toggle -->
+    <div class="col-span-2 flex justify-between items-center mb-4">
+      <h1 class="text-2xl font-bold">File Analysis Tool</h1>
+      <button id="themeToggle" class="p-2 rounded focus:outline-none">
+        <svg id="themeIcon" class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+          <path id="sunIcon" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.707.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 11-2 0 1 1 0 012 0zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 11-2 0 1 1 0 012 0zm-1-7a1 1 0 011-1h1a1 1 0 110 2H3a1 1 0 01-1-1zm12 0a1 1 0 011-1h1a1 1 0 110 2h-1a1 1 0 01-1-1z"></path>
+          <path id="moonIcon" class="hidden" fill-rule="evenodd" d="M6.258 3.605a7 7 0 1110.237 9.79A7 7 0 016.258 3.605zm.847 1.404a5 5 0 107.287 7.287A5 5 0 007.105 5.01z" clip-rule="evenodd"></path>
+        </svg>
+      </button>
     </div>
-    <button id="saveHex" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-400">Save Hex Changes</button>
-  </div>
-  <main class="flex-grow max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 mt-48">
     <!-- Left Column: File Input, Graphical View, Metadata, Section Table -->
     <div class="space-y-4">
       <div class="bg-white dark:bg-gray-800 p-4 rounded shadow card">
@@ -93,8 +86,16 @@
         <table id="sectionTable" class="border-collapse border w-full"></table>
       </div>
     </div>
-    <!-- Right Column: Scrubber, Encryption, Binary Sample -->
+    <!-- Right Column: Hex Viewer, Scrubber, Encryption, Binary Sample -->
     <div class="space-y-4">
+      <div class="bg-white dark:bg-gray-800 p-4 rounded shadow card">
+        <h2 class="text-lg font-semibold mb-2">Hex Viewer</h2>
+        <div class="flex">
+          <div id="hexViewer" class="overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm flex-1"></div>
+          <div id="asciiViewer" class="overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm w-1/4"></div>
+        </div>
+        <button id="saveHex" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-400">Save Hex Changes</button>
+      </div>
       <div class="bg-white dark:bg-gray-800 p-4 rounded shadow card">
         <h2 class="text-lg font-semibold mb-2">Scrubber</h2>
         <input type="range" id="scrubber" min="0" max="0" value="0" class="w-full">
