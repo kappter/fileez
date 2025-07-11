@@ -39,6 +39,8 @@ const cipherError = document.getElementById('cipherError');
 const graphicalViewSection = document.getElementById('graphicalViewSection');
 const graphicalViewCanvas = document.getElementById('graphicalViewCanvas');
 const ctx = graphicalViewCanvas.getContext('2d');
+const byteInfoDisplay = document.getElementById('byteInfoDisplay');
+
 
 const MAX_FILE_SIZE = 100 * 1024; // 100 KB in bytes
 let currentFileBuffer = null; // Stores the ArrayBuffer of the current file
@@ -48,7 +50,10 @@ let currentViewLength = 256; // Default view length
 // Define colors for graphical view
 const COLOR_HEADER_METADATA = '#3B82F6'; // Tailwind blue-500
 const COLOR_PAYLOAD_DATA = '#10B981';    // Tailwind emerald-500
+const COLOR_HIGHLIGHT = '#F59E0B';       // Tailwind amber-500 for clicked byte
 const HEADER_METADATA_BYTES = 64; // First 64 bytes for header/metadata
+
+const BYTES_PER_ROW_GRAPHICAL = 64; // Fixed number of bytes to display per row in graphical view
 
 // --- Utility Functions ---
 
@@ -290,7 +295,7 @@ function caesarCipher(text, shift, encrypt) {
             result += String.fromCharCode(((char - 65 + shift) % 26) + 65);
         }
         // Lowercase letters (a-z)
-        else if (char >= 97 && char >= 97 && char <= 122) {
+        else if (char >= 97 && char <= 122) {
             result += String.fromCharCode(((char - 97 + shift) % 26) + 97);
         }
         // Other characters (numbers, symbols, spaces) remain unchanged
@@ -304,59 +309,56 @@ function caesarCipher(text, shift, encrypt) {
 /**
  * Renders the graphical view of the file bytes on the canvas.
  * @param {ArrayBuffer} buffer The file buffer to visualize.
+ * @param {number} [highlightByteIndex = -1] Optional index of a byte to highlight.
  */
-function renderGraphicalView(buffer) {
+function renderGraphicalView(buffer, highlightByteIndex = -1) {
     if (!buffer || buffer.byteLength === 0) {
         ctx.clearRect(0, 0, graphicalViewCanvas.width, graphicalViewCanvas.height);
+        byteInfoDisplay.textContent = 'Click a byte in the graphical view to see its details.';
         return;
     }
 
     const bytes = new Uint8Array(buffer);
     const totalBytes = bytes.byteLength;
 
+    const canvasWidth = graphicalViewCanvas.width; // Fixed width from HTML
+    const pixelWidthPerByte = canvasWidth / BYTES_PER_ROW_GRAPHICAL;
+    const pixelHeightPerByte = pixelWidthPerByte; // Make them square
+
+    const numRows = Math.ceil(totalBytes / BYTES_PER_ROW_GRAPHICAL);
+    const requiredCanvasHeight = numRows * pixelHeightPerByte;
+
+    // Set canvas height dynamically to enable scrolling in its container
+    graphicalViewCanvas.height = requiredCanvasHeight;
+
     // Clear the canvas
-    ctx.clearRect(0, 0, graphicalViewCanvas.width, graphicalViewCanvas.height);
+    ctx.clearRect(0, 0, canvasWidth, requiredCanvasHeight);
 
-    // Calculate dimensions for each "byte block"
-    // We want to fill the canvas, so calculate pixel dimensions per byte
-    // For small files, each byte might be represented by multiple pixels.
-    // For large files, multiple bytes might be represented by one pixel.
+    for (let i = 0; i < totalBytes; i++) {
+        const row = Math.floor(i / BYTES_PER_ROW_GRAPHICAL);
+        const col = i % BYTES_PER_ROW_GRAPHICAL;
 
-    const canvasWidth = graphicalViewCanvas.width;
-    const canvasHeight = graphicalViewCanvas.height;
+        const x = col * pixelWidthPerByte;
+        const y = row * pixelHeightPerByte;
 
-    // Determine the number of "cells" in the grid
-    const cellSize = 2; // Each cell is 2x2 pixels for better visibility
-    const cellsX = Math.floor(canvasWidth / cellSize);
-    const cellsY = Math.floor(canvasHeight / cellSize);
-    const totalCells = cellsX * cellsY;
-
-    // How many bytes does each cell represent?
-    const bytesPerCell = Math.ceil(totalBytes / totalCells);
-
-    let currentByteIndex = 0;
-
-    for (let y = 0; y < cellsY; y++) {
-        for (let x = 0; x < cellsX; x++) {
-            if (currentByteIndex >= totalBytes) {
-                break; // All bytes rendered
-            }
-
-            // Determine the color based on byte category
-            let fillColor;
-            if (currentByteIndex < HEADER_METADATA_BYTES) {
-                fillColor = COLOR_HEADER_METADATA; // Header/Metadata
-            } else {
-                fillColor = COLOR_PAYLOAD_DATA; // Payload Data
-            }
-
-            ctx.fillStyle = fillColor;
-            ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
-
-            currentByteIndex += bytesPerCell;
+        let fillColor;
+        if (i < HEADER_METADATA_BYTES) {
+            fillColor = COLOR_HEADER_METADATA; // Header/Metadata
+        } else {
+            fillColor = COLOR_PAYLOAD_DATA; // Payload Data
         }
-        if (currentByteIndex >= totalBytes) {
-            break;
+
+        if (i === highlightByteIndex) {
+            fillColor = COLOR_HIGHLIGHT; // Highlight clicked byte
+        }
+
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(x, y, pixelWidthPerByte, pixelHeightPerByte);
+
+        // Optional: Add a thin border for better separation if pixel size is large enough
+        if (pixelWidthPerByte > 4) { // Only add border if cells are reasonably large
+            ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+            ctx.strokeRect(x, y, pixelWidthPerByte, pixelHeightPerByte);
         }
     }
 }
@@ -419,6 +421,8 @@ fileInput.addEventListener('change', (event) => {
         // Show graphical view
         graphicalViewSection.classList.remove('hidden');
         renderGraphicalView(currentFileBuffer); // Render graphical view
+        byteInfoDisplay.textContent = 'Click a byte in the graphical view to see its details.'; // Reset info text
+
 
         // Show scrub tool, data display, and encryption sections
         scrubToolSection.classList.remove('hidden');
@@ -564,6 +568,44 @@ decryptButton.addEventListener('click', () => {
     const textToDecrypt = cipherOutput.value;
     const decryptedText = caesarCipher(textToDecrypt, shift, false);
     cipherOutput.value = decryptedText;
+});
+
+// New event listener for graphical view clicks
+graphicalViewCanvas.addEventListener('click', (event) => {
+    if (!currentFileBuffer) return;
+
+    const rect = graphicalViewCanvas.getBoundingClientRect();
+    // Adjust for scroll position of the parent container
+    const scrollY = graphicalViewCanvas.parentElement.scrollTop;
+    const x = event.clientX - rect.left;
+    const y = (event.clientY - rect.top) + scrollY; // Add scrollY to get true Y relative to canvas top
+
+    const canvasWidth = graphicalViewCanvas.width;
+    const pixelWidthPerByte = canvasWidth / BYTES_PER_ROW_GRAPHICAL;
+    const pixelHeightPerByte = pixelWidthPerByte;
+
+    const col = Math.floor(x / pixelWidthPerByte);
+    const row = Math.floor(y / pixelHeightPerByte);
+
+    const clickedByteIndex = row * BYTES_PER_ROW_GRAPHICAL + col;
+
+    if (clickedByteIndex >= 0 && clickedByteIndex < currentFileBuffer.byteLength) {
+        const byteValue = new Uint8Array(currentFileBuffer)[clickedByteIndex];
+        const hex = byteValue.toString(16).padStart(2, '0');
+        const binary = byteValue.toString(2).padStart(8, '0');
+        const ascii = (byteValue >= 32 && byteValue <= 126) ? String.fromCharCode(byteValue) : '.';
+
+        byteInfoDisplay.innerHTML = `
+            <span class="font-semibold">Offset:</span> 0x${clickedByteIndex.toString(16).toUpperCase()} (${clickedByteIndex}) &nbsp;
+            <span class="font-semibold">Hex:</span> 0x${hex.toUpperCase()} &nbsp;
+            <span class="font-semibold">Binary:</span> ${binary} &nbsp;
+            <span class="font-semibold">ASCII:</span> '${ascii}'
+        `;
+        renderGraphicalView(currentFileBuffer, clickedByteIndex); // Re-render to highlight
+    } else {
+        byteInfoDisplay.textContent = 'Click a byte in the graphical view to see its details.';
+        renderGraphicalView(currentFileBuffer); // Clear highlight
+    }
 });
 
 
