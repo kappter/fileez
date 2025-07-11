@@ -1,13 +1,65 @@
-<!DOCTYPE html>
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>File Analysis Tool</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='blue'/></svg>" type="image/svg+xml">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+  <style>
+    #byteTooltip {
+      position: absolute;
+      display: none;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      z-index: 10;
+    }
+  </style>
 </head>
 <body class="bg-gray-100 p-4">
   <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-md">
@@ -18,8 +70,10 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <!-- Graphical View and Hex Viewer -->
       <div>
-        <h2 class="text-xl font-semibold mb-2">Graphical View</h2>
-        <canvas id="fileCanvas" class="w-full border rounded mb-2"></canvas>
+        <h2 class="text-xl font-semibold mb-2">Graphical View (Scrollable)</h2>
+        <div class="w-full h-64 overflow-auto border rounded mb-2">
+          <svg id="fileSvg" width="160" height="0"></svg>
+        </div>
         <div class="text-sm mb-2">
           <p><span class="inline-block w-4 h-4 bg-yellow-200"></span> Metadata (Potentially Sensitive)</p>
           <p><span class="inline-block w-4 h-4 bg-blue-200"></span> File System/Headers</p>
@@ -60,11 +114,14 @@
       </div>
       <textarea id="encryptedOutput" class="w-full h-32 p-2 border rounded font-mono text-sm" placeholder="Encrypted hex will appear here..."></textarea>
     </div>
+
+    <!-- Byte Tooltip -->
+    <div id="byteTooltip"></div>
   </div>
 
   <script>
     const fileInput = document.getElementById('fileInput');
-    const fileCanvas = document.getElementById('fileCanvas');
+    const fileSvg = document.getElementById('fileSvg');
     const hexViewer = document.getElementById('hexViewer');
     const saveHex = document.getElementById('saveHex');
     const metadata = document.getElementById('metadata');
@@ -77,6 +134,7 @@
     const encryptBtn = document.getElementById('encryptBtn');
     const decryptBtn = document.getElementById('decryptBtn');
     const encryptedOutput = document.getElementById('encryptedOutput');
+    const byteTooltip = document.getElementById('byteTooltip');
     const MAX_FILE_SIZE = 1024 * 1024; // 1MB
     let fileBuffer = null;
     let sensitiveRanges = [];
@@ -89,7 +147,7 @@
       'jpeg': { signature: [0xFF, 0xD8], metadata: parseImageMetadata, sensitive: parseImageSensitive, headers: parseImageHeaders },
       'png': { signature: [0x89, 0x50, 0x4E, 0x47], metadata: parseImageMetadata, sensitive: parseImageSensitive, headers: parseImageHeaders },
       'docx': { signature: [0x50, 0x4B, 0x03, 0x04], metadata: parseDocxMetadata, sensitive: parseDocxSensitive, headers: parseDocxHeaders },
-      'mp3': { signature: [0x49, 0x44, 0x33], metadata: parseMp3Metadata, sensitive: parseMp m3Sensitive, headers: parseMp3Headers },
+      'mp3': { signature: [0x49, 0x44, 0x33], metadata: parseMp3Metadata, sensitive: parseMp3Sensitive, headers: parseMp3Headers },
       'pdf': { signature: [0x25, 0x50, 0x44, 0x46], metadata: parseGenericMetadata, sensitive: parseGenericSensitive, headers: parsePdfHeaders },
       'mp4': { signature: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], metadata: parseGenericMetadata, sensitive: parseGenericSensitive, headers: parseMp4Headers }
     };
@@ -121,7 +179,7 @@
       sensitiveRanges = await fileSignatures[ext].sensitive(file, fileBuffer);
       headerRanges = await fileSignatures[ext].headers(file, fileBuffer);
       // Display graphical view
-      drawFileCanvas(fileBuffer, sensitiveRanges, headerRanges);
+      drawFileSvg(fileBuffer, sensitiveRanges, headerRanges);
       // Display hex data with sensitive highlights
       displayHex(fileBuffer, sensitiveRanges);
       // Display metadata
@@ -136,15 +194,16 @@
       clearError();
     });
 
-    // Canvas click handler
-    fileCanvas.addEventListener('click', (e) => {
-      const rect = fileCanvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const byteIndex = Math.floor(x / (fileCanvas.width / fileBuffer.length));
-      scrubber.value = byteIndex;
-      scrubberPos.textContent = `Position: ${byteIndex}`;
-      highlightHexPosition(byteIndex);
-      drawFileCanvas(fileBuffer, sensitiveRanges, headerRanges, byteIndex);
+    // SVG click handler
+    fileSvg.addEventListener('click', (e) => {
+      if (e.target.tagName === 'rect') {
+        const byteIndex = parseInt(e.target.getAttribute('data-index'));
+        scrubber.value = byteIndex;
+        scrubberPos.textContent = `Position: ${byteIndex}`;
+        highlightHexPosition(byteIndex);
+        showByteTooltip(e, byteIndex);
+        drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, byteIndex);
+      }
     });
 
     // Save hex changes
@@ -155,7 +214,7 @@
         return;
       }
       fileBuffer = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-      drawFileCanvas(fileBuffer, sensitiveRanges, headerRanges);
+      drawFileSvg(fileBuffer, sensitiveRanges, headerRanges);
       displayHex(fileBuffer, sensitiveRanges);
       clearError();
     });
@@ -165,7 +224,7 @@
       const pos = parseInt(scrubber.value);
       scrubberPos.textContent = `Position: ${pos}`;
       highlightHexPosition(pos);
-      drawFileCanvas(fileBuffer, sensitiveRanges, headerRanges, pos);
+      drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, pos);
     });
 
     // Encryption handler
@@ -202,14 +261,15 @@
       clearError();
     });
 
-    // Draw file on canvas
-    function drawFileCanvas(buffer, sensitiveRanges, headerRanges, highlightPos = -1) {
-      const ctx = fileCanvas.getContext('2d');
-      const width = Math.min(800, buffer.length);
-      const height = 20;
-      fileCanvas.width = width;
-      fileCanvas.height = height;
-      const pixelWidth = width / buffer.length;
+    // Draw file on SVG
+    function drawFileSvg(buffer, sensitiveRanges, headerRanges, highlightPos = -1) {
+      const bytesPerRow = 16;
+      const rectSize = 10;
+      const width = bytesPerRow * rectSize;
+      const height = Math.ceil(buffer.length / bytesPerRow) * rectSize;
+      fileSvg.setAttribute('width', width);
+      fileSvg.setAttribute('height', height);
+      fileSvg.innerHTML = '';
 
       for (let i = 0; i < buffer.length; i++) {
         let color = 'rgb(200, 200, 200)'; // Unknown/Other (Gray)
@@ -220,16 +280,35 @@
         } else {
           color = 'rgb(144, 238, 144)'; // Content (Green)
         }
-        ctx.fillStyle = color;
-        ctx.fillRect(i * pixelWidth, 0, pixelWidth, height);
+        const x = (i % bytesPerRow) * rectSize;
+        const y = Math.floor(i / bytesPerRow) * rectSize;
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', x);
+        rect.setAttribute('y', y);
+        rect.setAttribute('width', rectSize);
+        rect.setAttribute('height', rectSize);
+        rect.setAttribute('fill', color);
+        rect.setAttribute('data-index', i);
+        if (i === highlightPos) {
+          rect.setAttribute('stroke', 'red');
+          rect.setAttribute('stroke-width', '2');
+        }
+        fileSvg.appendChild(rect);
       }
+    }
 
-      // Draw highlight for current position
-      if (highlightPos >= 0 && highlightPos < buffer.length) {
-        ctx.strokeStyle = 'red';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(highlightPos * pixelWidth, 0, pixelWidth, height);
-      }
+    // Show byte tooltip
+    function showByteTooltip(event, index) {
+      const hex = fileBuffer[index].toString(16).padStart(2, '0').toUpperCase();
+      const binary = fileBuffer[index].toString(2).padStart(8, '0');
+      byteTooltip.innerHTML = `Position: ${index}<br>Hex: ${hex}<br>Binary: ${binary}`;
+      byteTooltip.style.display = 'block';
+      const rect = event.target.getBoundingClientRect();
+      byteTooltip.style.left = `${rect.left + window.scrollX + rectSize}px`;
+      byteTooltip.style.top = `${rect.top + window.scrollY + rectSize}px`;
+      setTimeout(() => {
+        byteTooltip.style.display = 'none';
+      }, 2000); // Hide after 2 seconds
     }
 
     // Display hex data with highlights
@@ -310,7 +389,7 @@
           const metadata = [`File Name: ⚠️ ${file.name}`, `Size: ${file.size} bytes`, `Type: ${file.type}`];
           for (let tag in exifData) {
             const isSensitive = ['GPSLatitude', 'GPSLongitude', 'DateTime', 'Model'].includes(tag);
-            metadata.push(`${isSensitive ? '⚠️ ' : ''}${tag}: ${exifData[tagbq]}`);
+            metadata.push(`${isSensitive ? '⚠️ ' : ''}${tag}: ${exifData[tag]}`);
           }
           resolve(metadata.join('<br>') || 'No EXIF data available.');
         });
