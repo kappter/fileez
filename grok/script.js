@@ -293,3 +293,147 @@ function parseImageSensitive(file, buffer) {
 // Parse image headers
 function parseImageHeaders(file, buffer) {
   return Promise.resolve([[0, 8]]); // First 8 bytes for magic numbers
+}
+
+// Parse docx metadata
+async function parseDocxMetadata(file, buffer) {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    const docProps = await zip.file('docProps/core.xml')?.async('string');
+    if (docProps) {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(docProps, 'application/xml');
+      const props = {
+        creator: xml.querySelector('creator')?.textContent,
+        lastModifiedBy: xml.querySelector('lastModifiedBy')?.textContent,
+        created: xml.querySelector('created')?.textContent,
+        modified: xml.querySelector('modified')?.textContent
+      };
+      return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.modified || 'N/A'}`;
+    }
+    return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No detailed metadata available.`;
+  } catch (e) {
+    return `Error parsing docx metadata: ${e.message}`;
+  }
+}
+
+// Parse docx sensitive ranges
+async function parseDocxSensitive(file, buffer) {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    const docProps = await zip.file('docProps/core.xml')?.async('string');
+    if (docProps) {
+      return [[0, 500]]; // First 500 bytes for ZIP headers and metadata
+    }
+    return [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Parse docx headers
+async function parseDocxHeaders(file, buffer) {
+  return [[0, 30]]; // ZIP file header
+}
+
+// Parse mp3 metadata
+function parseMp3Metadata(file, buffer) {
+  const id3 = buffer.slice(0, 128);
+  if (id3[0] === 0x54 && id3[1] === 0x41 && id3[2] === 0x47) {
+    const title = String.fromCharCode(...id3.slice(3, 33)).trim();
+    const artist = String.fromCharCode(...id3.slice(33, 63)).trim();
+    const album = String.fromCharCode(...id3.slice(63, 93)).trim();
+    return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Title: ⚠️ ${title || 'N/A'}<br>Artist: ⚠️ ${artist || 'N/A'}<br>Album: ${album || 'N/A'}`;
+  }
+  return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No ID3v1 metadata found.`;
+}
+
+// Parse mp3 sensitive ranges
+function parseMp3Sensitive(file, buffer) {
+  if (buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
+    return [[0, 128]]; // ID3v1 tag at start
+  }
+  return [];
+}
+
+// Parse mp3 headers
+function parseMp3Headers(file, buffer) {
+  return [[0, 10]]; // ID3 header
+}
+
+// Parse generic metadata
+function parseGenericMetadata(file) {
+  return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No specific metadata parser available.`;
+}
+
+// Parse generic sensitive ranges
+function parseGenericSensitive(file) {
+  return Promise.resolve([]);
+}
+
+// Parse PDF headers
+function parsePdfHeaders(file, buffer) {
+  return [[0, 8]]; // PDF magic number
+}
+
+// Parse MP4 headers
+function parseMp4Headers(file, buffer) {
+  return [[0, 8]]; // MP4 ftyp box
+}
+
+// Encrypt data
+function encryptData(buffer, cipher, key) {
+  if (cipher === 'caesar') {
+    const shift = parseInt(key) || 3;
+    return Array.from(buffer).map(b => (b + shift) % 256);
+  } else if (cipher === 'aes') {
+    const text = String.fromCharCode(...buffer);
+    const encrypted = CryptoJS.AES.encrypt(text, key).toString();
+    return new TextEncoder().encode(encrypted);
+  } else if (cipher === 'xor') {
+    const keyByte = parseInt(key) || 0xFF;
+    return Array.from(buffer).map(b => b ^ keyByte);
+  }
+  return buffer;
+}
+
+// Decrypt data
+function decryptData(buffer, cipher, key) {
+  if (cipher === 'caesar') {
+    const shift = parseInt(key) || 3;
+    return Array.from(buffer).map(b => (b - shift + 256) % 256);
+  } else if (cipher === 'aes') {
+    try {
+      const text = String.fromCharCode(...buffer);
+      const decrypted = CryptoJS.AES.decrypt(text, key).toString(CryptoJS.enc.Utf8);
+      return new TextEncoder().encode(decrypted);
+    } catch (e) {
+      showError('Decryption failed. Invalid key or data.');
+      return buffer;
+    }
+  } else if (cipher === 'xor') {
+    const keyByte = parseInt(key) || 0xFF;
+    return Array.from(buffer).map(b => b ^ keyByte);
+  }
+  return buffer;
+}
+
+// Display encrypted hex
+function displayEncryptedHex(buffer) {
+  const hex = Array.from(buffer)
+    .map(b => b.toString(16).padStart(2, '0').toUpperCase())
+    .join(' ');
+  encryptedOutput.value = hex;
+}
+
+// Show error
+function showError(msg) {
+  error.textContent = msg;
+  error.classList.remove('hidden');
+}
+
+// Clear error
+function clearError() {
+  error.textContent = '';
+  error.classList.add('hidden');
+}
