@@ -57,8 +57,12 @@
             <div class="flex items-center gap-4 mb-4">
                 <span class="inline-block w-6 h-6 rounded-sm bg-blue-500"></span> <span class="text-gray-700">Header/Metadata</span>
                 <span class="inline-block w-6 h-6 rounded-sm bg-emerald-500"></span> <span class="text-gray-700">Payload Data</span>
+                <span class="inline-block w-6 h-6 rounded-sm bg-amber-500"></span> <span class="text-gray-700">Selected Byte</span>
             </div>
-            <canvas id="graphicalViewCanvas" width="700" height="400"></canvas>
+            <div class="overflow-y-auto max-h-96 border border-gray-200 rounded-md">
+                <canvas id="graphicalViewCanvas" width="700"></canvas>
+            </div>
+            <p id="byteInfoDisplay" class="mt-4 text-sm text-gray-700">Click a byte in the graphical view to see its details.</p>
         </div>
 
 
