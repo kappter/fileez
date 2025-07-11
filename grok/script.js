@@ -3,6 +3,7 @@ const fileSvg = document.getElementById('fileSvg');
 const hexViewer = document.getElementById('hexViewer');
 const saveHex = document.getElementById('saveHex');
 const metadata = document.getElementById('metadata');
+const sectionTable = document.getElementById('sectionTable');
 const binaryOutput = document.getElementById('binaryOutput');
 const error = document.getElementById('error');
 const scrubber = document.getElementById('scrubber');
@@ -18,6 +19,7 @@ const rectSize = 10;
 let fileBuffer = null;
 let sensitiveRanges = [];
 let headerRanges = [];
+let sectionRanges = [];
 
 // Supported file types and their magic numbers
 const fileSignatures = {
@@ -54,9 +56,10 @@ fileInput.addEventListener('change', async (e) => {
     return;
   }
 
-  // Get sensitive and header ranges
+  // Get sensitive, header, and section ranges
   sensitiveRanges = await fileSignatures[ext].sensitive(file, fileBuffer);
   headerRanges = await fileSignatures[ext].headers(file, fileBuffer);
+  sectionRanges = await generateSectionRanges(file, fileBuffer, ext);
   // Display graphical view
   drawFileSvg(fileBuffer, sensitiveRanges, headerRanges);
   // Display hex data with sensitive highlights
@@ -64,6 +67,8 @@ fileInput.addEventListener('change', async (e) => {
   // Display metadata
   const metadataText = await fileSignatures[ext].metadata(file, fileBuffer);
   metadata.innerHTML = metadataText;
+  // Generate section table
+  generateSectionTable(sectionRanges, ext);
   // Display binary sample
   displayBinarySample(fileBuffer);
   // Initialize scrubber
@@ -82,6 +87,15 @@ fileSvg.addEventListener('click', (e) => {
     highlightHexPosition(byteIndex);
     showByteTooltip(e, byteIndex);
     drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, byteIndex);
+  }
+});
+
+// Section table click handler
+sectionTable.addEventListener('click', (e) => {
+  if (e.target.classList.contains('section-rect')) {
+    const start = parseInt(e.target.getAttribute('data-start'));
+    const end = parseInt(e.target.getAttribute('data-end'));
+    highlightHexRange(start, end);
   }
 });
 
@@ -203,7 +217,7 @@ function displayHex(buffer, ranges) {
   hexViewer.innerHTML = hex;
 }
 
-// Highlight hex position
+// Highlight single hex position
 function highlightHexPosition(pos) {
   const spans = hexViewer.querySelectorAll('span');
   if (pos < spans.length) {
@@ -215,6 +229,94 @@ function highlightHexPosition(pos) {
     sel.addRange(range);
     span.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
+}
+
+// Highlight hex range
+function highlightHexRange(start, end) {
+  const spans = hexViewer.querySelectorAll('span');
+  if (start < spans.length && end < spans.length && start <= end) {
+    const range = document.createRange();
+    range.setStartBefore(spans[start]);
+    range.setEndAfter(spans[end]);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    spans[start].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+// Generate section table
+function generateSectionTable(ranges, ext) {
+  sectionTable.innerHTML = '';
+  const sections = [
+    { name: 'File Name', range: ranges.find(r => r.name === 'File Name')?.range || null, color: 'bg-yellow-200' },
+    { name: 'Extension', range: ranges.find(r => r.name === 'Extension')?.range || null, color: 'bg-yellow-200' },
+    { name: 'Headers', range: ranges.find(r => r.name === 'Headers')?.range || null, color: 'bg-blue-200' },
+    { name: 'Content', range: ranges.find(r => r.name === 'Content')?.range || null, color: 'bg-green-200' }
+  ];
+
+  const table = document.createElement('table');
+  table.className = 'border-collapse border w-full';
+  const tbody = document.createElement('tbody');
+  sections.forEach(section => {
+    const tr = document.createElement('tr');
+    const tdLabel = document.createElement('td');
+    tdLabel.className = 'border p-2';
+    tdLabel.textContent = section.name;
+    const tdRect = document.createElement('td');
+    tdRect.className = 'border p-2';
+    if (section.range) {
+      const rect = document.createElement('div');
+      rect.className = `section-rect ${section.color} w-4 h-4 cursor-pointer`;
+      rect.setAttribute('data-start', section.range[0]);
+      rect.setAttribute('data-end', section.range[1]);
+      tdRect.appendChild(rect);
+    } else {
+      tdRect.textContent = 'N/A';
+    }
+    tr.appendChild(tdLabel);
+    tr.appendChild(tdRect);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  sectionTable.appendChild(table);
+}
+
+// Generate section ranges
+async function generateSectionRanges(file, buffer, ext) {
+  const ranges = [];
+  const name = file.name.split('.').slice(0, -1).join('.');
+  const extension = file.name.split('.').pop().toLowerCase();
+  
+  // File Name and Extension (from File API, not binary for most formats)
+  ranges.push({ name: 'File Name', range: null }); // External to binary
+  ranges.push({ name: 'Extension', range: null }); // External to binary
+  
+  // Headers (from existing headerRanges)
+  if (headerRanges.length > 0) {
+    ranges.push({ name: 'Headers', range: headerRanges[0] }); // Use first header range
+  }
+  
+  // Content (approximate as non-header, non-metadata)
+  const contentStart = headerRanges.length > 0 ? headerRanges[0][1] + 1 : 0;
+  ranges.push({ name: 'Content', range: [contentStart, buffer.length - 1] });
+  
+  // MP3: File name in ID3 tags
+  if (ext === 'mp3' && buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
+    ranges.find(r => r.name === 'File Name').range = [3, 32]; // Title field in ID3v1
+  }
+  
+  // DOCX: File name in docProps/core.xml
+  if (ext === 'docx') {
+    try {
+      const zip = await JSZip.loadAsync(buffer);
+      if (zip.file('docProps/core.xml')) {
+        ranges.find(r => r.name === 'File Name').range = [0, 500]; // Approximate ZIP metadata
+      }
+    } catch (e) {}
+  }
+  
+  return ranges.filter(r => r.range || r.name === 'File Name' || r.name === 'Extension');
 }
 
 // Initialize scrubber
@@ -243,7 +345,9 @@ function parseTextMetadata(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => {
-      resolve(`File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: text/plain<br>Sample Content: ${reader.result.slice(0, 100)}...`);
+      const name = file.name.split('.').slice(0, -1).join('.');
+      const ext = file.name.split('.').pop().toLowerCase();
+      resolve(`File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Size: ${file.size} bytes<br>Type: text/plain<br>Sample Content: ${reader.result.slice(0, 100)}...<br>Note: File name and extension are managed by the file system, not stored in the binary.`);
     };
     reader.readAsText(file);
   });
@@ -264,7 +368,9 @@ function parseImageMetadata(file) {
   return new Promise((resolve) => {
     window.EXIF.getData(file, function() {
       const exifData = window.EXIF.getAllTags(this);
-      const metadata = [`File Name: ⚠️ ${file.name}`, `Size: ${file.size} bytes`, `Type: ${file.type}`];
+      const name = file.name.split('.').slice(0, -1).join('.');
+      const ext = file.name.split('.').pop().toLowerCase();
+      const metadata = [`File Name: ⚠️ ${name}`, `Extension: ${ext}`, `Size: ${file.size} bytes`, `Type: ${file.type}`, `Note: File name and extension are managed by the file system, not stored in the binary.`];
       for (let tag in exifData) {
         const isSensitive = ['GPSLatitude', 'GPSLongitude', 'DateTime', 'Model'].includes(tag);
         metadata.push(`${isSensitive ? '⚠️ ' : ''}${tag}: ${exifData[tag]}`);
@@ -298,6 +404,8 @@ function parseImageHeaders(file, buffer) {
 // Parse docx metadata
 async function parseDocxMetadata(file, buffer) {
   try {
+    const name = file.name.split('.').slice(0, -1).join('.');
+    const ext = file.name.split('.').pop().toLowerCase();
     const zip = await JSZip.loadAsync(buffer);
     const docProps = await zip.file('docProps/core.xml')?.async('string');
     if (docProps) {
@@ -309,9 +417,9 @@ async function parseDocxMetadata(file, buffer) {
         created: xml.querySelector('created')?.textContent,
         modified: xml.querySelector('modified')?.textContent
       };
-      return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.modified || 'N/A'}`;
+      return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.modified || 'N/A'}<br>Note: File name may be stored in docProps/core.xml (bytes 0-500).`;
     }
-    return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No detailed metadata available.`;
+    return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No detailed metadata available.<br>Note: File name and extension are managed by the file system.`;
   } catch (e) {
     return `Error parsing docx metadata: ${e.message}`;
   }
@@ -338,14 +446,16 @@ async function parseDocxHeaders(file, buffer) {
 
 // Parse mp3 metadata
 function parseMp3Metadata(file, buffer) {
+  const name = file.name.split('.').slice(0, -1).join('.');
+  const ext = file.name.split('.').pop().toLowerCase();
   const id3 = buffer.slice(0, 128);
   if (id3[0] === 0x54 && id3[1] === 0x41 && id3[2] === 0x47) {
     const title = String.fromCharCode(...id3.slice(3, 33)).trim();
     const artist = String.fromCharCode(...id3.slice(33, 63)).trim();
     const album = String.fromCharCode(...id3.slice(63, 93)).trim();
-    return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Title: ⚠️ ${title || 'N/A'}<br>Artist: ⚠️ ${artist || 'N/A'}<br>Album: ${album || 'N/A'}`;
+    return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Title: ⚠️ ${title || 'N/A'} (bytes 3-32)<br>Artist: ⚠️ ${artist || 'N/A'}<br>Album: ${album || 'N/A'}<br>Note: File name may be stored in ID3v1 title (bytes 3-32).`;
   }
-  return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No ID3v1 metadata found.`;
+  return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No ID3v1 metadata found.<br>Note: File name and extension are managed by the file system.`;
 }
 
 // Parse mp3 sensitive ranges
@@ -363,7 +473,9 @@ function parseMp3Headers(file, buffer) {
 
 // Parse generic metadata
 function parseGenericMetadata(file) {
-  return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No specific metadata parser available.`;
+  const name = file.name.split('.').slice(0, -1).join('.');
+  const ext = file.name.split('.').pop().toLowerCase();
+  return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No specific metadata parser available.<br>Note: File name and extension are managed by the file system.`;
 }
 
 // Parse generic sensitive ranges

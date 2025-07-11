@@ -43,70 +43,60 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>File Analysis Tool</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='blue'/></svg>" type="image/svg+xml">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-  <link href="styles.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='gray'/><rect x='4' y='4' width='8' height='8' fill='blue'/></svg>">
+  <link href="/file-analysis-tool/styles.css" rel="stylesheet">
 </head>
-<body class="bg-gray-100 p-4">
-  <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-md">
+<body class="bg-gray-200 p-4">
+  <div class="max-w-4xl mx-auto bg-white p-6 rounded shadow">
     <h1 class="text-2xl font-bold mb-4">File Analysis Tool</h1>
-    <input type="file" id="fileInput" class="mb-4 p-2 border rounded" accept=".txt,.jpg,.jpeg,.png,.docx,.mp3,.pdf,.mp4">
-    <p id="error" class="text-red-500 hidden"></p>
-
+    <input type="file" id="fileInput" class="mb-4" accept=".txt,.jpg,.jpeg,.png,.docx,.mp3,.pdf,.mp4">
+    <div id="error" class="text-red-500 mb-4 hidden"></div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- Graphical View and Hex Viewer -->
       <div>
-        <h2 class="text-xl font-semibold mb-2">Graphical View (Scrollable)</h2>
-        <div class="w-full h-64 overflow-auto border rounded mb-2">
-          <svg id="fileSvg" width="160" height="0"></svg>
+        <h2 class="text-lg font-semibold mb-2">Graphical View</h2>
+        <div class="overflow-auto max-h-96 border">
+          <svg id="fileSvg" class="w-full"></svg>
         </div>
-        <div class="text-sm mb-2">
-          <p><span class="inline-block w-4 h-4 bg-yellow-200"></span> Metadata (Potentially Sensitive)</p>
-          <p><span class="inline-block w-4 h-4 bg-blue-200"></span> File System/Headers</p>
-          <p><span class="inline-block w-4 h-4 bg-green-200"></span> Content</p>
-          <p><span class="inline-block w-4 h-4 bg-gray-200"></span> Unknown/Other</p>
-        </div>
-        <h2 class="text-xl font-semibold mb-2">Hex Viewer (Sensitive Data Highlighted)</h2>
-        <div id="hexViewer" class="w-full h-64 p-2 border rounded font-mono text-sm overflow-auto" contenteditable="true"></div>
-        <button id="saveHex" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Save Hex Changes</button>
-        <div class="mt-2">
-          <label for="scrubber" class="block text-sm font-medium">Scrub through file:</label>
-          <input type="range" id="scrubber" min="0" max="0" value="0" class="w-full">
-          <p id="scrubberPos" class="text-sm">Position: 0</p>
-        </div>
+        <div id="byteTooltip" class="absolute bg-gray-800 text-white text-sm p-2 rounded shadow hidden"></div>
       </div>
-
-      <!-- Metadata and Binary Output -->
       <div>
-        <h2 class="text-xl font-semibold mb-2">Metadata</h2>
-        <pre id="metadata" class="bg-gray-50 p-2 border rounded h-32 overflow-auto text-sm"></pre>
-        <h2 class="text-xl font-semibold mt-4 mb-2">Binary Sample</h2>
-        <pre id="binaryOutput" class="bg-gray-50 p-2 border rounded h-32 overflow-auto text-sm"></pre>
+        <h2 class="text-lg font-semibold mb-2">Hex Viewer</h2>
+        <div id="hexViewer" class="overflow-auto max-h-96 border p-2 bg-gray-100 font-mono text-sm"></div>
+        <button id="saveHex" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Save Hex Changes</button>
       </div>
     </div>
-
-    <!-- Encryption Section -->
-    <div class="mt-6">
-      <h2 class="text-xl font-semibold mb-2">Encryption Analysis</h2>
-      <div class="flex gap-4 mb-2">
-        <select id="cipherSelect" class="p-2 border rounded">
+    <h2 class="text-lg font-semibold mt-4 mb-2">Metadata</h2>
+    <div id="metadata" class="border p-2 mb-4"></div>
+    <h2 class="text-lg font-semibold mb-2">File Sections</h2>
+    <table id="sectionTable" class="border-collapse border mb-4 w-full"></table>
+    <h2 class="text-lg font-semibold mb-2">Binary Sample (First 256 Bytes)</h2>
+    <div id="binaryOutput" class="border p-2 mb-4 font-mono text-sm"></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <h2 class="text-lg font-semibold mb-2">Scrubber</h2>
+        <input type="range" id="scrubber" min="0" max="0" value="0" class="w-full">
+        <div id="scrubberPos" class="mt-2">Position: 0</div>
+      </div>
+      <div>
+        <h2 class="text-lg font-semibold mb-2">Encryption Analysis</h2>
+        <select id="cipherSelect" class="border p-2 mb-2 w-full">
           <option value="caesar">Caesar Cipher</option>
           <option value="aes">AES-256</option>
           <option value="xor">XOR Cipher</option>
         </select>
-        <input type="text" id="cipherKey" class="p-2 border rounded" placeholder="Enter key (e.g., 3 for Caesar, password for AES)">
-        <button id="encryptBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Encrypt</button>
-        <button id="decryptBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Decrypt</button>
+        <input type="text" id="cipherKey" placeholder="Enter key" class="border p-2 mb-2 w-full">
+        <div class="flex gap-2">
+          <button id="encryptBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Encrypt</button>
+          <button id="decryptBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Decrypt</button>
+        </div>
+        <textarea id="encryptedOutput" class="border p-2 mt-2 w-full h-24 font-mono text-sm" readonly></textarea>
       </div>
-      <textarea id="encryptedOutput" class="w-full h-32 p-2 border rounded font-mono text-sm" placeholder="Encrypted hex will appear here..."></textarea>
     </div>
-
-    <!-- Byte Tooltip -->
-    <div id="byteTooltip"></div>
   </div>
-  <script src="script.js"></script>
+  <script src="/file-analysis-tool/script.js"></script>
 </body>
 </html>
