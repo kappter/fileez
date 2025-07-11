@@ -10,9 +10,10 @@ const fileMetadata = document.getElementById('fileMetadata');
 const headerAnalysis = document.getElementById('headerAnalysis');
 const headerDetails = document.getElementById('headerDetails');
 const scrubToolSection = document.getElementById('scrubToolSection');
-const offsetInput = document.getElementById('offsetInput');
+// Renamed from offsetInput to scrubSlider and added currentOffsetDisplay
+const scrubSlider = document.getElementById('scrubSlider');
+const currentOffsetDisplay = document.getElementById('currentOffsetDisplay');
 const lengthInput = document.getElementById('lengthInput');
-const applyScrub = document.getElementById('applyScrub');
 const currentViewRange = document.getElementById('currentViewRange');
 const dataDisplaySection = document.getElementById('dataDisplaySection');
 const hexDataDisplay = document.getElementById('hexData');
@@ -88,9 +89,10 @@ function arrayBufferToBinary(buffer, offset = 0, length = buffer.byteLength) {
  * @param {ArrayBuffer} buffer The ArrayBuffer to format.
  * @param {number} offset The starting offset for the view.
  * @param {number} length The number of bytes to view.
+ * @param {number} [highlightOffset = -1] Optional absolute offset of a byte to highlight.
  * @returns {string} Formatted hex string with offsets and ASCII.
  */
-function formatHexWithAscii(buffer, offset, length) {
+function formatHexWithAscii(buffer, offset, length, highlightOffset = -1) {
     const bytes = new Uint8Array(buffer, offset, length);
     let formattedOutput = '';
     const bytesPerLine = 16;
@@ -104,11 +106,16 @@ function formatHexWithAscii(buffer, offset, length) {
 
         // Hex values
         for (let j = 0; j < bytesPerLine; j++) {
+            const absoluteByteOffset = currentLineOffset + j;
             if (j < currentLineBytes.length) {
                 const byteValue = currentLineBytes[j];
                 const hex = byteValue.toString(16).padStart(2, '0').toUpperCase();
+                let classes = "hex-byte-editable";
+                if (absoluteByteOffset === highlightOffset) {
+                    classes += " highlighted-hex-byte"; // Apply new highlight class
+                }
                 // Add data-offset and data-value for editing
-                formattedOutput += `<span class="hex-byte-editable" data-offset="${currentLineOffset + j}" data-value="${hex}">${hex}</span> `;
+                formattedOutput += `<span class="${classes}" data-offset="${absoluteByteOffset}" data-value="${hex}">${hex}</span> `;
             } else {
                 formattedOutput += '   '; // Placeholder for shorter last line
             }
@@ -248,8 +255,9 @@ function analyzeHeaders(buffer) {
 
 /**
  * Renders the file data (hex and binary) based on current view settings.
+ * @param {number} [highlightOffset = -1] Optional absolute offset of a byte to highlight in the hex view.
  */
-function renderFileData() {
+function renderFileData(highlightOffset = -1) {
     if (!currentFileBuffer) return;
 
     const totalBytes = currentFileBuffer.byteLength;
@@ -258,12 +266,13 @@ function renderFileData() {
     const actualLength = endByte - startByte;
 
     // Update scrub tool inputs and range display
-    offsetInput.value = startByte;
-    lengthInput.value = actualLength;
+    // Ensure scrubSlider value is in sync with currentViewOffset
+    scrubSlider.value = currentViewOffset;
+    currentOffsetDisplay.textContent = currentViewOffset;
     currentViewRange.textContent = `${startByte} - ${endByte - 1}`;
 
-    // Display Hex Data
-    hexDataDisplay.innerHTML = formatHexWithAscii(currentFileBuffer, startByte, actualLength);
+    // Display Hex Data, passing the highlightOffset
+    hexDataDisplay.innerHTML = formatHexWithAscii(currentFileBuffer, startByte, actualLength, highlightOffset);
     // Display Binary Data
     binaryDataDisplay.textContent = formatBinary(currentFileBuffer, startByte, actualLength);
 
@@ -271,6 +280,23 @@ function renderFileData() {
     document.querySelectorAll('.hex-byte-editable').forEach(span => {
         span.onclick = (event) => openEditModal(event.target);
     });
+
+    // If a highlight is requested and it's within the current view, scroll to it
+    if (highlightOffset !== -1 && highlightOffset >= startByte && highlightOffset < endByte) {
+        const hexByteElement = hexDataDisplay.querySelector(`[data-offset="${highlightOffset}"]`);
+        if (hexByteElement) {
+            // Calculate the scroll position to bring the element into view
+            const containerScrollTop = hexDataDisplay.scrollTop;
+            const elementOffsetTop = hexByteElement.offsetTop;
+            const elementHeight = hexByteElement.offsetHeight;
+            const containerHeight = hexDataDisplay.clientHeight;
+
+            // Scroll only if the element is not fully visible
+            if (elementOffsetTop < containerScrollTop || elementOffsetTop + elementHeight > containerScrollTop + containerHeight) {
+                hexDataDisplay.scrollTop = elementOffsetTop - (containerHeight / 2) + (elementHeight / 2);
+            }
+        }
+    }
 }
 
 /**
@@ -334,6 +360,8 @@ function renderGraphicalView(buffer, highlightByteIndex = -1) {
     // Clear the canvas
     ctx.clearRect(0, 0, canvasWidth, requiredCanvasHeight);
 
+    const borderSize = 0.5; // Small border for visual separation
+
     for (let i = 0; i < totalBytes; i++) {
         const row = Math.floor(i / BYTES_PER_ROW_GRAPHICAL);
         const col = i % BYTES_PER_ROW_GRAPHICAL;
@@ -353,13 +381,10 @@ function renderGraphicalView(buffer, highlightByteIndex = -1) {
         }
 
         ctx.fillStyle = fillColor;
-        ctx.fillRect(x, y, pixelWidthPerByte, pixelHeightPerByte);
+        // Draw slightly smaller rectangle to create a border effect
+        ctx.fillRect(x + borderSize, y + borderSize, pixelWidthPerByte - 2 * borderSize, pixelHeightPerByte - 2 * borderSize);
 
-        // Optional: Add a thin border for better separation if pixel size is large enough
-        if (pixelWidthPerByte > 4) { // Only add border if cells are reasonably large
-            ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-            ctx.strokeRect(x, y, pixelWidthPerByte, pixelHeightPerByte);
-        }
+        // No need for separate strokeRect if using fillRect with borderSize
     }
 }
 
@@ -410,6 +435,11 @@ fileInput.addEventListener('change', (event) => {
         currentViewOffset = 0; // Reset view offset
         currentViewLength = Math.min(256, currentFileBuffer.byteLength); // Default to 256 bytes or less if file is smaller
 
+        // Update scrub slider max value
+        scrubSlider.max = Math.max(0, currentFileBuffer.byteLength - currentViewLength);
+        scrubSlider.value = 0; // Reset slider to start
+        currentOffsetDisplay.textContent = 0; // Reset display
+
         // Display metadata (basic file properties)
         fileMetadata.textContent = `File Name: ${file.name}\nFile Type: ${file.type || 'Unknown'}\nFile Size: ${file.size} bytes\nLast Modified: ${new Date(file.lastModified).toLocaleString()}`;
         metadataSection.classList.remove('hidden');
@@ -426,7 +456,7 @@ fileInput.addEventListener('change', (event) => {
 
         // Show scrub tool, data display, and encryption sections
         scrubToolSection.classList.remove('hidden');
-        dataDisplaySection.classList.add('hidden'); // Hide hex/binary display initially
+        dataDisplaySection.classList.remove('hidden'); // Show hex/binary display
         encryptionSection.classList.remove('hidden'); // Show encryption section
 
         renderFileData(); // Initial render
@@ -441,27 +471,32 @@ fileInput.addEventListener('change', (event) => {
     reader.readAsArrayBuffer(file);
 });
 
-applyScrub.addEventListener('click', () => {
-    if (!currentFileBuffer) return;
+// Event listener for scrub slider
+scrubSlider.addEventListener('input', () => {
+    currentViewOffset = parseInt(scrubSlider.value, 10);
+    renderFileData(); // Re-render hex data based on new offset
+    // No need to re-render graphical view unless there's a highlight to clear/add
+    // renderGraphicalView(currentFileBuffer); // Could clear highlight here if desired
+});
 
-    const newOffset = parseInt(offsetInput.value, 10);
-    const newLength = parseInt(lengthInput.value, 10);
-
-    if (isNaN(newOffset) || newOffset < 0 || newOffset >= currentFileBuffer.byteLength) {
-        // In a real app, you might show a specific error message for invalid offset
-        offsetInput.value = currentViewOffset; // Revert to current valid offset
-        return;
+// Event listener for length input
+lengthInput.addEventListener('change', () => { // Using 'change' for number input is often better for performance
+    let newLength = parseInt(lengthInput.value, 10);
+    if (isNaN(newLength) || newLength < 1) {
+        newLength = 256; // Default to 256 if invalid
+        lengthInput.value = newLength;
     }
-    if (isNaN(newLength) || newLength <= 0) {
-         // In a real app, you might show a specific error message for invalid length
-        lengthInput.value = currentViewLength; // Revert to current valid length
-        return;
-    }
-
-    currentViewOffset = newOffset;
     currentViewLength = newLength;
+    // Adjust slider max if length changes
+    scrubSlider.max = Math.max(0, currentFileBuffer.byteLength - currentViewLength);
+    // Ensure current offset doesn't exceed new max
+    if (currentViewOffset > scrubSlider.max) {
+        currentViewOffset = scrubSlider.max;
+        scrubSlider.value = currentViewOffset;
+    }
     renderFileData();
 });
+
 
 // --- Modal Logic for Hex Editing ---
 let selectedHexByteSpan = null; // Reference to the span being edited
@@ -601,10 +636,15 @@ graphicalViewCanvas.addEventListener('click', (event) => {
             <span class="font-semibold">Binary:</span> ${binary} &nbsp;
             <span class="font-semibold">ASCII:</span> '${ascii}'
         `;
-        renderGraphicalView(currentFileBuffer, clickedByteIndex); // Re-render to highlight
+        renderGraphicalView(currentFileBuffer, clickedByteIndex); // Re-render graphical view to highlight
+
+        // Scroll hex data display to the clicked byte and highlight it there
+        currentViewOffset = Math.max(0, clickedByteIndex - Math.floor(currentViewLength / 2)); // Center the clicked byte
+        renderFileData(clickedByteIndex); // Re-render hex data with highlight
     } else {
         byteInfoDisplay.textContent = 'Click a byte in the graphical view to see its details.';
-        renderGraphicalView(currentFileBuffer); // Clear highlight
+        renderGraphicalView(currentFileBuffer); // Clear graphical highlight
+        renderFileData(); // Clear hex highlight
     }
 });
 
