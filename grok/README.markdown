@@ -2,7 +2,7 @@
 
 ## Overview
 
-The File Analysis Tool is a web-based educational app for computer science students to explore file structures and cryptography. Built with HTML, JavaScript, and CSS, it visualizes file bytes, highlights sensitive data, extracts metadata, and supports encryption/decryption. It includes a table of selectable rectangles to highlight key file sections (e.g., file name, extension) in the hex viewer. Ideal for learning file formats, binary/hex representation, and data security.
+The File Analysis Tool is a web-based educational app for computer science students to explore file structures and cryptography. Built with HTML, JavaScript, and CSS, it visualizes file bytes, highlights sensitive data, extracts metadata, and supports encryption/decryption. It includes a table of selectable rectangles to highlight key file sections (e.g., file name, extension, created date/time) in the hex viewer. Ideal for learning file formats, binary/hex representation, and data security.
 
 ## Features
 
@@ -16,12 +16,13 @@ The File Analysis Tool is a web-based educational app for computer science stude
   - Clicking an SVG rectangle highlights only the corresponding hex byte; clicking a table rectangle highlights a range.
 - **Metadata Display**:
   - Extracts metadata (e.g., EXIF for images, ID3 for MP3s, docProps for DOCX).
-  - Explicitly shows file name and extension, with notes on their storage (file system or binary).
+  - Shows file name, extension, created date/time, last modified date/time, hidden, locked, and deleted status.
   - Sensitive fields (e.g., file name, GPS data) marked with ⚠️.
+  - Notes whether data is stored in the file system or binary (e.g., MP3 ID3 tags, DOCX `core.xml`).
 - **Section Table**:
-  - A table summarizing key file sections (File Name, Extension, Headers, Content).
-  - Each section has a clickable 16x16px rectangle (yellow for metadata, blue for headers, green for content) that highlights the corresponding hex bytes.
-  - File name/extension may be external (file system) or internal (e.g., MP3 ID3 tags, DOCX metadata).
+  - Summarizes key file sections: File Name, Extension, Created Date/Time, Last Modified Date/Time, Hidden, Locked, Deleted, Headers, Content.
+  - Each section has a clickable 16x16px rectangle (yellow for metadata, blue for headers, green for content) that highlights the corresponding hex bytes, if applicable.
+  - File system metadata (e.g., hidden, locked) shows “N/A” for binary ranges.
 - **Binary Sample**:
   - Shows the first 256 bytes in binary format.
 - **Scrubber**:
@@ -61,19 +62,26 @@ The File Analysis Tool is a web-based educational app for computer science stude
      @tailwind base;
      @tailwind components;
      @tailwind utilities;
+     .section-rect {
+       width: 16px;
+       height: 16px;
+       display: inline-block;
+     }
      ```
    - Build `styles.css`: `npx tailwindcss -i ./input.css -o ./styles.css --minify`.
    - Remove `<script src="https://cdn.tailwindcss.com">` from `index.html`.
 
 ### Deployment on GitHub Pages
 1. Create a repository (e.g., `kappter/file-analysis-tool`).
-2. Commit `index.html`, `script.js`, `styles.css`, and `README.md` to the root.
-3. Enable GitHub Pages in settings (`main` branch, `/ (root)` folder).
-4. Access at `https://kappter.github.io/file-analysis-tool`.
-5. Ensure paths in `index.html`: `<script src="/file-analysis-tool/script.js">` and `<link href="/file-analysis-tool/styles.css">`.
+2. Commit `index.html`, `script.js`, `styles.css`, and `README.md` to the root or a subdirectory (e.g., `docs/`).
+3. Enable GitHub Pages in settings (`main` branch, `/ (root)` or `/docs` folder).
+4. Update `index.html` paths based on your repository structure:
+   - For root: `<link href="/file-analysis-tool/styles.css">`, `<script src="/file-analysis-tool/script.js">`.
+   - For subdirectory (e.g., `docs/`): `<link href="/file-analysis-tool/docs/styles.css">`, `<script src="/file-analysis-tool/docs/script.js">`.
+5. Access at `https://kappter.github.io/file-analysis-tool` (or `/docs` if using a subdirectory).
 6. **Favicon**: Inline SVG favicon prevents 404 errors. For a physical favicon:
-   - Add `favicon.ico` to the root.
-   - Update `index.html`: `<link rel="icon" href="/file-analysis-tool/favicon.ico" type="image/x-icon">`.
+   - Add `favicon.ico` to the root or subdirectory.
+   - Update `index.html`: `<link rel="icon" href="/file-analysis-tool/favicon.ico" type="image/x-icon">` (or `/file-analysis-tool/docs/favicon.ico`).
 
 ## Usage
 
@@ -90,16 +98,16 @@ The File Analysis Tool is a web-based educational app for computer science stude
      - Highlight only that byte’s hex value in the hex viewer.
 
 3. **Use the Section Table**:
-   - View a table of key sections (File Name, Extension, Headers, Content).
+   - View a table of key sections (File Name, Extension, Created Date/Time, Last Modified Date/Time, Hidden, Locked, Deleted, Headers, Content).
    - Click a rectangle to highlight the corresponding byte range in the hex viewer (e.g., bytes 3-32 for MP3 title).
-   - Note: File name/extension are often managed by the file system, except in MP3 (ID3 tags) or DOCX (ZIP metadata).
+   - Note: File system metadata (e.g., hidden, locked) shows “N/A” as it’s not stored in the binary.
 
 4. **Use the Hex Viewer**:
    - View/edit hex data (sensitive sections in yellow).
    - Click "Save Hex Changes" to update the file (invalid input shows an error).
 
 5. **Check Metadata**:
-   - View metadata, including file name and extension; sensitive fields marked with ⚠️.
+   - View metadata, including file name, extension, created/last modified date/time, and notes on hidden, locked, and deleted status.
 
 6. **View Binary Sample**:
    - See the first 256 bytes in binary.
@@ -114,11 +122,19 @@ The File Analysis Tool is a web-based educational app for computer science stude
 
 ## Troubleshooting
 
+- **404 Errors for `styles.css` or `script.js`**:
+  - **Local Testing**: Ensure `styles.css` and `script.js` are in the same directory as `index.html`. Use relative paths (`./styles.css`, `./script.js`) in `index.html`.
+  - **GitHub Pages**: Verify files are committed to the repository root or subdirectory (e.g., `docs/`). Update `index.html` paths to match (e.g., `/file-analysis-tool/styles.css` or `/file-analysis-tool/docs/styles.css`). Check GitHub Pages settings (`main` branch, correct folder).
+  - **Fix**: Use GitHub’s web interface to upload files:
+    1. Go to your repository (e.g., `kappter/file-analysis-tool`).
+    2. Click “Add file” > “Upload files”.
+    3. Upload `styles.css` and `script.js` to the root or `docs/`.
+    4. Commit changes.
 - **Tailwind CDN Warning**: Appears with CDN; use production setup to generate `styles.css`.
 - **Favicon 404**: Inline SVG favicon fixes this. For GitHub Pages, verify paths or add `favicon.ico`.
 - **Syntax Error (`script.js`)**: Fixed `Unexpected end of input` by ensuring proper code structure.
-- **Hex Viewer Selection**: Fixed to highlight only the clicked byte for SVG clicks; table clicks highlight ranges.
-- **Section Table**: If rectangles show “N/A,” the section (e.g., file name) may not be stored in the binary.
+- **Hex Viewer Selection**: Fixed to highlight single bytes for SVG clicks; table clicks highlight ranges.
+- **Section Table**: “N/A” indicates metadata (e.g., created date/time, hidden) stored in the file system, not the binary.
 - **File Size Errors**: Keep files under 1MB.
 - **Browser Issues**: Use Chrome, Firefox, or Edge; older browsers may not support SVG/JavaScript.
 
@@ -127,12 +143,13 @@ The File Analysis Tool is a web-based educational app for computer science stude
 - **Learning Objectives**:
   - Explore file structures (headers, metadata, content) via the SVG grid and section table.
   - Understand binary/hex with clickable rectangles and hex editing.
-  - Learn where file names/extensions are stored (file system or binary).
+  - Learn where file name, extension, and system metadata (created date/time, hidden, locked, deleted) are stored.
   - Study cryptography through encryption/decryption.
 - **Limitations**:
   - 1MB file size limit.
   - SVG grid may be tall for large files; scroll to navigate.
   - Tooltip hides after 2 seconds.
+  - System metadata (hidden, locked, deleted) is not accessible via the File API.
 - **Customization**:
   - Adjust SVG grid in `script.js` (`bytesPerRow`, `rectSize`).
   - Change tooltip duration in `showByteTooltip` (`setTimeout`).
