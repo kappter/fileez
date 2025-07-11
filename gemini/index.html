@@ -32,6 +32,9 @@
             <p><span class="font-semibold">Size:</span> <span id="fileSize"></span> bytes</p>
             <p><span class="font-semibold">Type:</span> <span id="fileType"></span></p>
             <p><span class="font-semibold">Last Modified:</span> <span id="fileLastModified"></span></p>
+            <p class="text-sm text-gray-600 mt-2">
+                Note: Browser security prevents access to local file system details like creation date, hidden status, or locked status.
+            </p>
         </div>
 
         <!-- Metadata and Header Information Section -->
@@ -68,18 +71,22 @@
 
         <!-- Scrub Tool Section -->
         <div id="scrubToolSection" class="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner hidden">
-            <h2 class="text-2xl font-bold text-gray-800 mb-4">Scrub Tool (View Specific Range)</h2>
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Scrub Tool (Linear File Traversal)</h2>
+            <p class="text-sm text-gray-700 mb-4">
+                Use the slider to traverse the file byte by byte. Adjust the "View Length" to change how many bytes are shown at once.
+            </p>
             <div class="flex flex-col sm:flex-row items-center gap-4 mb-4">
-                <label for="offsetInput" class="font-semibold text-gray-700">Offset (bytes):</label>
-                <input type="number" id="offsetInput" min="0" value="0"
-                       class="w-full sm:w-32 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/>
-                <label for="lengthInput" class="font-semibold text-gray-700">Length (bytes):</label>
+                <label for="scrubSlider" class="font-semibold text-gray-700 whitespace-nowrap">Current Offset:</label>
+                <input type="range" id="scrubSlider" min="0" value="0" class="flex-grow h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"/>
+                <span id="currentOffsetDisplay" class="font-semibold text-gray-700 w-20 text-right">0</span> bytes
+            </div>
+            <div class="flex flex-col sm:flex-row items-center gap-4 mb-4">
+                <label for="lengthInput" class="font-semibold text-gray-700 whitespace-nowrap">View Length (bytes):</label>
                 <input type="number" id="lengthInput" min="1" value="256"
                        class="w-full sm:w-32 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/>
-                <button id="applyScrub" class="mt-4 sm:mt-0 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-md hover:bg-indigo-700 transition duration-200">Apply</button>
             </div>
             <div class="text-sm text-gray-600">
-                <p>Current View: <span id="currentViewRange">0 - 255</span></p>
+                <p>Currently Viewing: <span id="currentViewRange">0 - 255</span></p>
             </div>
         </div>
 
