@@ -42,11 +42,15 @@ const graphicalViewCanvas = document.getElementById('graphicalViewCanvas');
 const ctx = graphicalViewCanvas.getContext('2d');
 const byteInfoDisplay = document.getElementById('byteInfoDisplay');
 
+// Encoding selection element
+const encodingSelect = document.getElementById('encodingSelect');
+
 
 const MAX_FILE_SIZE = 100 * 1024; // 100 KB in bytes
 let currentFileBuffer = null; // Stores the ArrayBuffer of the current file
 let currentViewOffset = 0;
 let currentViewLength = 256; // Default view length
+let currentEncoding = 'utf-8'; // Default encoding
 
 // Define colors for graphical view
 const COLOR_HEADER_METADATA = '#3B82F6'; // Tailwind blue-500
@@ -96,6 +100,7 @@ function formatHexWithAscii(buffer, offset, length, highlightOffset = -1) {
     const bytes = new Uint8Array(buffer, offset, length);
     let formattedOutput = '';
     const bytesPerLine = 16;
+    const textDecoder = new TextDecoder(currentEncoding, { fatal: false }); // Use currentEncoding
 
     for (let i = 0; i < bytes.length; i += bytesPerLine) {
         const currentLineBytes = bytes.slice(i, i + bytesPerLine);
@@ -123,12 +128,12 @@ function formatHexWithAscii(buffer, offset, length, highlightOffset = -1) {
 
         formattedOutput += '  '; // Separator
 
-        // ASCII representation
-        for (let j = 0; j < currentLineBytes.length; j++) {
-            const byteValue = currentLineBytes[j];
-            // Replace non-printable ASCII characters with a dot
-            formattedOutput += (byteValue >= 32 && byteValue <= 126) ? String.fromCharCode(byteValue) : '.';
-        }
+        // ASCII representation using the selected encoding
+        const asciiChunk = textDecoder.decode(currentLineBytes);
+        formattedOutput += [...asciiChunk].map(char => {
+            const charCode = char.charCodeAt(0);
+            return (charCode >= 32 && charCode <= 126) ? char : '.'; // Replace non-printable with dot
+        }).join('');
         formattedOutput += '\n';
     }
     return formattedOutput;
@@ -497,6 +502,33 @@ lengthInput.addEventListener('change', () => { // Using 'change' for number inpu
     renderFileData();
 });
 
+// Event listener for encoding selection
+encodingSelect.addEventListener('change', (event) => {
+    currentEncoding = event.target.value;
+    if (currentFileBuffer) {
+        renderFileData(); // Re-render hex data with new encoding
+        // Re-render byte info display if a byte is currently selected
+        // This part needs to be handled carefully as the graphical view doesn't directly depend on encoding
+        // but the byteInfoDisplay does.
+        const currentHighlightedByte = graphicalViewCanvas.dataset.highlightedByte;
+        if (currentHighlightedByte) {
+            const byteIndex = parseInt(currentHighlightedByte, 10);
+            const byteValue = new Uint8Array(currentFileBuffer)[byteIndex];
+            const hex = byteValue.toString(16).padStart(2, '0');
+            const binary = byteValue.toString(2).padStart(8, '0');
+            const textDecoder = new TextDecoder(currentEncoding, { fatal: false });
+            const ascii = textDecoder.decode(new Uint8Array([byteValue]));
+
+            byteInfoDisplay.innerHTML = `
+                <span class="font-semibold">Offset:</span> 0x${byteIndex.toString(16).toUpperCase()} (${byteIndex}) &nbsp;
+                <span class="font-semibold">Hex:</span> 0x${hex.toUpperCase()} &nbsp;
+                <span class="font-semibold">Binary:</span> ${binary} &nbsp;
+                <span class="font-semibold">ASCII:</span> '${(ascii.charCodeAt(0) >= 32 && ascii.charCodeAt(0) <= 126) ? ascii : '.'}'
+            `;
+        }
+    }
+});
+
 
 // --- Modal Logic for Hex Editing ---
 let selectedHexByteSpan = null; // Reference to the span being edited
@@ -581,7 +613,7 @@ encryptButton.addEventListener('click', () => {
     // Get the ASCII representation of the *entire* file for encryption
     // Note: This will only work meaningfully for text-based files.
     // For binary files, the output will likely be gibberish but demonstrates the character shift.
-    const fileText = new TextDecoder('utf-8', { fatal: false }).decode(currentFileBuffer);
+    const fileText = new TextDecoder(currentEncoding, { fatal: false }).decode(currentFileBuffer); // Use current encoding
     const encryptedText = caesarCipher(fileText, shift, true);
     cipherOutput.value = encryptedText;
 });
@@ -628,15 +660,17 @@ graphicalViewCanvas.addEventListener('click', (event) => {
         const byteValue = new Uint8Array(currentFileBuffer)[clickedByteIndex];
         const hex = byteValue.toString(16).padStart(2, '0');
         const binary = byteValue.toString(2).padStart(8, '0');
-        const ascii = (byteValue >= 32 && byteValue <= 126) ? String.fromCharCode(byteValue) : '.';
+        const textDecoder = new TextDecoder(currentEncoding, { fatal: false }); // Use currentEncoding
+        const ascii = textDecoder.decode(new Uint8Array([byteValue]));
 
         byteInfoDisplay.innerHTML = `
             <span class="font-semibold">Offset:</span> 0x${clickedByteIndex.toString(16).toUpperCase()} (${clickedByteIndex}) &nbsp;
             <span class="font-semibold">Hex:</span> 0x${hex.toUpperCase()} &nbsp;
             <span class="font-semibold">Binary:</span> ${binary} &nbsp;
-            <span class="font-semibold">ASCII:</span> '${ascii}'
+            <span class="font-semibold">ASCII:</span> '${(ascii.charCodeAt(0) >= 32 && ascii.charCodeAt(0) <= 126) ? ascii : '.'}'
         `;
         renderGraphicalView(currentFileBuffer, clickedByteIndex); // Re-render graphical view to highlight
+        graphicalViewCanvas.dataset.highlightedByte = clickedByteIndex; // Store highlighted byte
 
         // Scroll hex data display to the clicked byte and highlight it there
         currentViewOffset = Math.max(0, clickedByteIndex - Math.floor(currentViewLength / 2)); // Center the clicked byte
@@ -645,6 +679,7 @@ graphicalViewCanvas.addEventListener('click', (event) => {
         byteInfoDisplay.textContent = 'Click a byte in the graphical view to see its details.';
         renderGraphicalView(currentFileBuffer); // Clear graphical highlight
         renderFileData(); // Clear hex highlight
+        delete graphicalViewCanvas.dataset.highlightedByte; // Clear stored highlighted byte
     }
 });
 
