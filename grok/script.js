@@ -14,12 +14,34 @@ const encryptBtn = document.getElementById('encryptBtn');
 const decryptBtn = document.getElementById('decryptBtn');
 const encryptedOutput = document.getElementById('encryptedOutput');
 const byteTooltip = document.getElementById('byteTooltip');
+const themeToggle = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+const sunIcon = document.getElementById('sunIcon');
+const moonIcon = document.getElementById('moonIcon');
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 const rectSize = 10;
 let fileBuffer = null;
 let sensitiveRanges = [];
 let headerRanges = [];
 let sectionRanges = [];
+
+// Theme toggle
+const applyTheme = (theme) => {
+  document.getElementById('html-root').classList.toggle('dark', theme === 'dark');
+  sunIcon.classList.toggle('hidden', theme === 'dark');
+  moonIcon.classList.toggle('hidden', theme !== 'dark');
+  localStorage.setItem('theme', theme);
+};
+
+// Initialize theme
+const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+applyTheme(savedTheme);
+
+// Theme toggle event
+themeToggle.addEventListener('click', () => {
+  const currentTheme = document.getElementById('html-root').classList.contains('dark') ? 'dark' : 'light';
+  applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+});
 
 // Supported file types and their magic numbers
 const fileSignatures = {
@@ -210,7 +232,7 @@ function displayHex(buffer, ranges) {
       const hexByte = b.toString(16).padStart(2, '0').toUpperCase();
       const isSensitive = ranges.some(([start, end]) => i >= start && i <= end);
       return isSensitive
-        ? `<span class="bg-yellow-200" title="Potentially Sensitive Data">${hexByte}</span>`
+        ? `<span class="bg-yellow-200 dark:bg-yellow-600" title="Potentially Sensitive Data">${hexByte}</span>`
         : `<span>${hexByte}</span>`;
     })
     .join(' ');
@@ -249,28 +271,28 @@ function highlightHexRange(start, end) {
 function generateSectionTable(ranges, ext) {
   sectionTable.innerHTML = '';
   const sections = [
-    { name: 'File Name', range: ranges.find(r => r.name === 'File Name')?.range || null, color: 'bg-yellow-200' },
-    { name: 'Extension', range: ranges.find(r => r.name === 'Extension')?.range || null, color: 'bg-yellow-200' },
-    { name: 'Encoding', range: ranges.find(r => r.name === 'Encoding')?.range || null, color: 'bg-yellow-200' },
-    { name: 'Created Date/Time', range: null, color: 'bg-yellow-200' },
-    { name: 'Last Modified Date/Time', range: null, color: 'bg-yellow-200' },
-    { name: 'Hidden', range: null, color: 'bg-yellow-200' },
-    { name: 'Locked', range: null, color: 'bg-yellow-200' },
-    { name: 'Deleted', range: null, color: 'bg-yellow-200' },
-    { name: 'Headers', range: ranges.find(r => r.name === 'Headers')?.range || null, color: 'bg-blue-200' },
-    { name: 'Content', range: ranges.find(r => r.name === 'Content')?.range || null, color: 'bg-green-200' }
+    { name: 'File Name', range: ranges.find(r => r.name === 'File Name')?.range || null, color: 'bg-yellow-200 dark:bg-yellow-600' },
+    { name: 'Extension', range: ranges.find(r => r.name === 'Extension')?.range || null, color: 'bg-yellow-200 dark:bg-yellow-600' },
+    { name: 'Encoding', range: ranges.find(r => r.name === 'Encoding')?.range || null, color: 'bg-yellow-200 dark:bg-yellow-600' },
+    { name: 'Created Date/Time', range: null, color: 'bg-yellow-200 dark:bg-yellow-600' },
+    { name: 'Last Modified Date/Time', range: null, color: 'bg-yellow-200 dark:bg-yellow-600' },
+    { name: 'Hidden', range: null, color: 'bg-yellow-200 dark:bg-yellow-600' },
+    { name: 'Locked', range: null, color: 'bg-yellow-200 dark:bg-yellow-600' },
+    { name: 'Deleted', range: null, color: 'bg-yellow-200 dark:bg-yellow-600' },
+    { name: 'Headers', range: ranges.find(r => r.name === 'Headers')?.range || null, color: 'bg-blue-200 dark:bg-blue-600' },
+    { name: 'Content', range: ranges.find(r => r.name === 'Content')?.range || null, color: 'bg-green-200 dark:bg-green-600' }
   ];
 
   const table = document.createElement('table');
-  table.className = 'border-collapse border w-full';
+  table.className = 'border-collapse border w-full border-gray-300 dark:border-gray-600';
   const tbody = document.createElement('tbody');
   sections.forEach(section => {
     const tr = document.createElement('tr');
     const tdLabel = document.createElement('td');
-    tdLabel.className = 'border p-2';
+    tdLabel.className = 'border p-2 border-gray-300 dark:border-gray-600';
     tdLabel.textContent = section.name;
     const tdRect = document.createElement('td');
-    tdRect.className = 'border p-2';
+    tdRect.className = 'border p-2 border-gray-300 dark:border-gray-600';
     if (section.range) {
       const rect = document.createElement('div');
       rect.className = `section-rect ${section.color} w-4 h-4 cursor-pointer`;

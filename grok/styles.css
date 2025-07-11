@@ -2,8 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-primary: #f3f4f6;
+  --bg-card: #ffffff;
+  --text-primary: #1f2937;
+  --border-primary: #d1d5db;
+  --hex-bg: #f3f4f6;
+  --yellow-sensitive: #fefcbf;
+  --blue-header: #bfdbfe;
+  --green-content: #bbf7d0;
+}
+
+.dark {
+  --bg-primary: #111827;
+  --bg-card: #1f2937;
+  --text-primary: #f3f4f6;
+  --border-primary: #4b5563;
+  --hex-bg: #374151;
+  --yellow-sensitive: #facc15;
+  --blue-header: #2563eb;
+  --green-content: #22c55e;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.card {
+  background-color: var(--bg-card);
+  border-color: var(--border-primary);
+}
+
+#hexViewer {
+  background-color: var(--hex-bg);
+}
+
 .section-rect {
   width: 16px;
   height: 16px;
   display: inline-block;
+}
+
+.bg-yellow-200 {
+  background-color: var(--yellow-sensitive);
+}
+
+.bg-blue-200 {
+  background-color: var(--blue-header);
+}
+
+.bg-green-200 {
+  background-color: var(--green-content);
+}
+
+footer {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
 }
