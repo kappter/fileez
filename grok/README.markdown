@@ -1,329 +1,60 @@
 # File Analysis Tool
 
-## Overview
-
-The File Analysis Tool is a web-based educational app for computer science students to explore file structures and cryptography. Built with HTML, JavaScript, and CSS, it visualizes file bytes, highlights sensitive data, extracts metadata, and supports encryption/decryption. The UI features a modular grid layout with a fixed footer, a dark/light mode toggle (applied to the entire page), a sticky hex viewer for easy access without scrolling, and a loading overlay to indicate file processing. A section table highlights key file sections (e.g., file name, extension, encoding, created date/time) in the hex viewer, ideal for learning file formats, binary/hex representation, and data security.
+A web-based tool for analyzing file structures, designed for educational purposes. Upload files to visualize their binary content, metadata, and sections, with features to explore file name and extension storage, hex data, and encryption.
 
 ## Features
-
-- **Modular Layout**:
-  - Two-column grid (responsive, stacks on mobile): left (file input, graphical view, metadata, section table), right (hex viewer, scrubber, encryption, binary sample).
-  - Each section is a styled card with rounded corners and shadows for clarity.
-- **Loading Indicator**:
-  - Full-screen overlay with a spinner and “Loading file...” text appears during file processing (e.g., reading, metadata parsing, rendering).
-  - Themed for dark/light mode; disappears when processing completes.
-- **Scrollable Graphical View**:
-  - Displays file bytes as 10x10px rectangles in a 16-column SVG grid, scrollable for large files.
-  - Colors: yellow (metadata, sensitive), blue (headers), green (content), gray (unknown/other).
-  - Click a rectangle to:
-    - View a tooltip (position, hex, binary, hides after 2 seconds).
-    - Set the scrubber to the byte’s position.
-    - Highlight only that byte’s hex value in the hex viewer.
-- **Sticky Hex Viewer**:
-  - Displays file bytes in hexadecimal, with sensitive data in yellow.
-  - Editable; click "Save Hex Changes" to apply modifications (invalid hex shows an error).
-  - Always visible (sticky positioning), eliminating scrolling to access the edit area.
-  - SVG clicks highlight single hex bytes; table clicks highlight ranges.
-- **Metadata Display**:
-  - Extracts metadata (e.g., EXIF for images, ID3 for MP3s, docProps for DOCX).
-  - Shows file name, extension, encoding (e.g., UTF-8, MPEG-1 Layer III), created/last modified date/time, hidden, locked, deleted status.
-  - Sensitive fields (e.g., file name, GPS data) marked with ⚠️.
-  - Notes storage (file system or binary, e.g., MP3 ID3 tags, DOCX `core.xml`).
-- **Section Table**:
-  - Summarizes sections: File Name, Extension, Encoding, Created Date/Time, Last Modified Date/Time, Hidden, Locked, Deleted, Headers, Content.
-  - Clickable 16x16px rectangles (yellow for metadata, blue for headers, green for content) highlight hex ranges (e.g., MP3 title bytes 3-32, encoding bytes 128-131).
-  - File system metadata (e.g., encoding for text, hidden) shows “N/A” for binary ranges.
-- **Binary Sample**:
-  - Shows first 256 bytes in binary format.
-- **Scrubber**:
-  - Slider navigates bytes, highlighting the selected byte in SVG (red outline) and hex viewer.
-- **Encryption Analysis**:
-  - Supports Caesar Cipher, AES-256, XOR Cipher for encrypting/decrypting file content.
-  - Outputs hex in a textarea.
-- **Dark/Light Mode Toggle**:
-  - Toggle button (sun/moon icons) in header switches themes for the entire page (header, main, footer, cards, SVG, tables, inputs), stored in `localStorage`.
-  - Light mode: gray background, white cards; dark mode: dark gray background, darker cards.
-- **Fixed Footer**:
-  - Displays copyright info (“© 2025 File Analysis Tool. For educational use only.”) at the bottom of the viewport.
-- **Supported File Types**:
-  - Text (.txt), JPEG (.jpg, .jpeg), PNG (.png), DOCX (.docx), MP3 (.mp3), PDF (.pdf), MP4 (.mp4).
-  - 1MB file size limit for performance.
+- **File Input**: Upload files (txt, jpg, jpeg, png, docx, mp3, pdf, mp4) up to 1MB.
+- **Graphical View**: Displays file bytes as a 16-column SVG grid (10x10px rectangles) with color coding:
+  - Orange: File name (e.g., MP3 ID3 title, DOCX core.xml).
+  - Blue: Headers.
+  - Yellow: Metadata/sensitive data.
+  - Green: Content.
+  - Gray: Unknown/other.
+- **Hex Viewer**: Fixed at the top, shows hex and ASCII data (16 bytes per row) with orange highlights for file name ranges and yellow for sensitive data.
+- **Metadata**: Displays file details (name, extension, encoding, etc.) with notes on file name/extension storage (file system vs. binary).
+- **File Sections**: Table listing sections (File Name, Extension, etc.) with clickable rectangles to highlight ranges in the hex viewer. "Learn More" buttons for File Name and Extension explain storage.
+- **Scrubber**: Navigate through file bytes, updating the hex viewer and SVG.
+- **Encryption Analysis**: Apply Caesar, AES-256, or XOR ciphers to file data.
+- **Binary Sample**: Shows the first 256 bytes in binary.
+- **Dark/Light Mode**: Toggle between themes with a navbar button.
+- **File Name/Extension Education**: Modal explains where file name and extension are stored (file system or binary, e.g., MP3 bytes 3-32, DOCX bytes 0-500), triggered by "Learn More" buttons in the section table.
 
 ## Setup
-
-### Prerequisites
-- Modern browser (Chrome, Firefox, Edge).
-- Files: `index.html`, `script.js`, `styles.css`.
-- Optional for production: Node.js and npm for Tailwind CSS.
-
-### Local Setup
-1. Place `index.html`, `script.js`, and `styles.css` in one directory.
-2. Open `index.html` in a browser (uses Tailwind CDN for prototyping).
-3. For production (to avoid CDN warning):
-   - Install Node.js and npm.
-   - Run `npm init -y`.
-   - Install Tailwind: `npm install -D tailwindcss`.
-   - Create `tailwind.config.js`:
-     ```javascript
-     /** @type {import('tailwindcss').Config} */
-     module.exports = {
-       content: ['./*.html'],
-       theme: { extend: {} },
-       plugins: [],
-     }
-     ```
-   - Create `input.css`:
-     ```css
-     @tailwind base;
-     @tailwind components;
-     @tailwind utilities;
-
-     :root {
-       --bg-primary: #f3f4f6;
-       --bg-card: #ffffff;
-       --text-primary: #1f2937;
-       --border-primary: #d1d5db;
-       --hex-bg: #f3f4f6;
-       --yellow-sensitive: #fefcbf;
-       --blue-header: #bfdbfe;
-       --green-content: #bbf7d0;
-       --svg-rect-gray: #c8c8c8;
-       --tooltip-bg: #1f2937;
-       --tooltip-text: #ffffff;
-       --input-bg: #ffffff;
-       --button-bg-blue: #3b82f6;
-       --button-bg-green: #22c55e;
-       --button-bg-red: #ef4444;
-       --button-text: #ffffff;
-       --loading-bg: #6b7280;
-       --loading-text: #ffffff;
-     }
-
-     .dark {
-       --bg-primary: #111827;
-       --bg-card: #1f2937;
-       --text-primary: #f3f4f6;
-       --border-primary: #4b5563;
-       --hex-bg: #374151;
-       --yellow-sensitive: #facc15;
-       --blue-header: #2563eb;
-       --green-content: #22c55e;
-       --svg-rect-gray: #6b7280;
-       --tooltip-bg: #374151;
-       --tooltip-text: #f3f4f6;
-       --input-bg: #374151;
-       --button-bg-blue: #60a5fa;
-       --button-bg-green: #4ade80;
-       --button-bg-red: #f87171;
-       --button-text: #f3f4f6;
-       --loading-bg: #1f2937;
-       --loading-text: #f3f4f6;
-     }
-
-     body {
-       background-color: var(--bg-primary);
-       color: var(--text-primary);
-     }
-
-     .card {
-       background-color: var(--bg-card);
-       border: 1px solid var(--border-primary);
-     }
-
-     #hexViewer {
-       background-color: var(--hex-bg);
-       color: var(--text-primary);
-     }
-
-     .section-rect {
-       width: 16px;
-       height: 16px;
-       display: inline-block;
-     }
-
-     .bg-yellow-200 {
-       background-color: var(--yellow-sensitive);
-     }
-
-     .bg-blue-200 {
-       background-color: var(--blue-header);
-     }
-
-     .bg-green-200 {
-       background-color: var(--green-content);
-     }
-
-     footer {
-       background-color: var(--bg-card);
-       color: var(--text-primary);
-     }
-
-     #byteTooltip {
-       background-color: var(--tooltip-bg);
-       color: var(--tooltip-text);
-     }
-
-     input[type="file"],
-     input[type="range"],
-     select,
-     textarea {
-       background-color: var(--input-bg);
-       color: var(--text-primary);
-       border: 1px solid var(--border-primary);
-     }
-
-     #saveHex {
-       background-color: var(--button-bg-blue);
-       color: var(--button-text);
-     }
-
-     #encryptBtn {
-       background-color: var(--button-bg-green);
-       color: var(--button-text);
-     }
-
-     #decryptBtn {
-       background-color: var(--button-bg-red);
-       color: var(--button-text);
-     }
-
-     #fileSvg rect[fill="rgb(200, 200, 200)"] {
-       fill: var(--svg-rect-gray);
-     }
-
-     #sectionTable {
-       border: 1px solid var(--border-primary);
-     }
-
-     #sectionTable td {
-       border: 1px solid var(--border-primary);
-     }
-
-     #themeToggle:hover {
-       background-color: var(--border-primary);
-     }
-
-     #loadingOverlay {
-       background-color: var(--loading-bg);
-     }
-
-     #loadingOverlay p {
-       color: var(--loading-text);
-     }
-
-     @keyframes spin {
-       to {
-         transform: rotate(360deg);
-       }
-     }
-
-     .animate-spin {
-       animation: spin 1s linear infinite;
-     }
-     ```
-   - Build `styles.css`: `npx tailwindcss -i ./input.css -o ./styles.css --minify`.
-   - Remove `<script src="https://cdn.tailwindcss.com">` from `index.html`.
-
-### Deployment on GitHub Pages
-1. Create a repository (e.g., `kappter/file-analysis-tool`).
-2. Commit `index.html`, `script.js`, `styles.css`, and `README.md` to the root or a subdirectory (e.g., `docs/`).
-3. Enable GitHub Pages in settings (`main` branch, `/ (root)` or `/docs` folder).
-4. Update `index.html` paths based on your repository structure:
-   - For root: `<link href="/file-analysis-tool/styles.css">`, `<script src="/file-analysis-tool/script.js">`.
-   - For subdirectory (e.g., `docs/`): `<link href="/file-analysis-tool/docs/styles.css">`, `<script src="/file-analysis-tool/docs/script.js">`.
-5. Access at `https://kappter.github.io/file-analysis-tool` (or `/docs` if using a subdirectory).
-6. **Favicon**: Inline SVG favicon prevents 404 errors. For a physical favicon:
-   - Add `favicon.ico` to the root or subdirectory.
-   - Update `index.html`: `<link rel="icon" href="/file-analysis-tool/favicon.ico" type="image/x-icon">` (or `/file-analysis-tool/docs/favicon.ico`).
-7. **Checklist for File Uploads**:
-   - Go to your repository on GitHub (e.g., `kappter/file-analysis-tool`).
-   - Click “Add file” > “Upload files”.
-   - Upload `index.html`, `script.js`, `styles.css`, and `README.md` to the root or `docs/`.
-   - Commit changes with a message (e.g., “Initial file upload”).
-   - Verify files appear in the repository’s file list.
-   - Check GitHub Pages settings to ensure the correct branch (`main`) and folder (`/ (root)` or `/docs`).
+1. Clone the repository or download files.
+2. Host on a local server (e.g., `python -m http.server`) or deploy to GitHub Pages.
+3. Ensure files are in the correct structure:
+   - `index.html`
+   - `script.js`
+   - `styles.css`
+4. Open `index.html` in a browser (Chrome recommended).
 
 ## Usage
+1. Upload a file via the File Input card.
+2. View the Graphical View (SVG grid) to see byte structure.
+3. Check the Hex Viewer (fixed at top) for hex and ASCII data.
+4. Explore the Metadata card for file details, including file name/extension storage notes.
+5. Use the File Sections table to highlight ranges (click rectangles) or learn about file name/extension storage (click "Learn More").
+6. Navigate bytes with the Scrubber or click SVG rectangles.
+7. Test encryption/decryption in the Encryption Analysis card.
+8. Toggle dark/light mode via the navbar button.
 
-1. **Toggle Theme**:
-   - Click the sun/moon icon in the header to switch between light and dark modes (applies to entire page, persists across sessions).
-2. **Upload a File**:
-   - Select a file (.txt, .jpg, .jpeg, .png, .docx, .mp3, .pdf, .mp4, up to 1MB).
-   - A loading overlay with a spinner and “Loading file...” appears during processing.
-   - Errors show for unsupported formats or oversized files.
-3. **Explore the Graphical View**:
-   - See bytes as a scrollable SVG grid (16 columns, 10x10px rectangles).
-   - Colors: yellow (metadata), blue (headers), green (content), gray (other).
-   - Click a rectangle to:
-     - View a tooltip (position, hex, binary).
-     - Set the scrubber to the byte’s position.
-     - Highlight only that byte’s hex value in the hex viewer.
-4. **Use the Hex Viewer**:
-   - Always visible (sticky) in the right column.
-   - View/edit hex data (sensitive sections in yellow).
-   - Click "Save Hex Changes" to update the file (invalid input shows an error).
-5. **Use the Section Table**:
-   - View sections (File Name, Extension, Encoding, Created Date/Time, Last Modified Date/Time, Hidden, Locked, Deleted, Headers, Content).
-   - Click a rectangle to highlight hex ranges (e.g., MP3 title bytes 3-32, encoding bytes 128-131).
-   - File system metadata (e.g., encoding for text, hidden) shows “N/A” if not stored in the binary.
-6. **Check Metadata**:
-   - View file name, extension, encoding (e.g., UTF-8, MPEG-1 Layer III), and system fields.
-7. **View Binary Sample**:
-   - See first 256 bytes in binary.
-8. **Navigate with the Scrubber**:
-   - Drag to select a byte, updating SVG (red outline) and hex viewer.
-9. **Perform Encryption**:
-   - Choose a cipher (Caesar, AES-256, XOR).
-   - Enter a key (e.g., "3" for Caesar, password for AES, number for XOR).
-   - Click "Encrypt" or "Decrypt" to see hex output.
+## Testing
+- **Test Files**: Use MP3 (e.g., `song.mp3` with ID3 tags), DOCX (e.g., `document.docx` with core.xml), and TXT (e.g., `note.txt`) files under 1MB.
+- **Verify**:
+  - File Name/Extension in Metadata card includes storage notes (e.g., “stored in file system” or “MP3 ID3 title, bytes 3-32”).
+  - Section Table shows “Learn More” buttons for File Name and Extension, opening a modal with details.
+  - Hex Viewer and SVG grid highlight file name ranges in orange (e.g., MP3 bytes 3-32, DOCX bytes 0-500).
+  - Modal explains file system vs. binary storage for the file type.
+  - Dark/light mode applies to modal and highlights.
+- **Deployment**: Test on GitHub Pages to ensure no 404 errors (use relative paths `./styles.css`, `./script.js`).
+- **Browser**: Test in Chrome for best compatibility.
 
 ## Troubleshooting
-
-- **Loading Overlay Issues**:
-  - **Overlay Persists**: Ensure `script.js` hides the overlay in the `finally` block of the `fileInput` event listener.
-  - **Overlay Not Showing**: Verify `<div id="loadingOverlay">` exists in `index.html` and `loadingOverlay.classList.remove('hidden')` is called.
-  - **Theming Issues**: Check `styles.css` for `--loading-bg` and `--loading-text` variables in light/dark modes.
-- **Dark/Light Mode Not Applying to All Elements**:
-  - Ensure `localStorage` is enabled in your browser.
-  - Verify `<html class="light" id="html-root">` in `index.html` and toggle button functionality.
-  - Check `styles.css` for correct `dark:` classes and CSS variables.
-- **404 Errors for `styles.css` or `script.js`**:
-  - **Local Testing**: Ensure `styles.css` and `script.js` are in the same directory as `index.html`. Use relative paths (`./styles.css`, `./script.js`) in `index.html`.
-  - **GitHub Pages**: Verify files are committed to the repository root or subdirectory (e.g., `docs/`). Update `index.html` paths to match (e.g., `/file-analysis-tool/styles.css` or `/file-analysis-tool/docs/styles.css`). Check GitHub Pages settings (`main` branch, correct folder).
-  - **Fix**: Use GitHub’s web interface to upload files:
-    1. Go to your repository (e.g., `kappter/file-analysis-tool`).
-    2. Click “Add file” > “Upload files”.
-    3. Upload `styles.css` and `script.js` to the root or `docs/`.
-    4. Commit changes.
-    5. Verify files in the repository’s file list.
-    6. Check the deployed URL (e.g., `https://kappter.github.io/file-analysis-tool`) and console for errors.
-- **Tailwind CDN Warning**: Appears with CDN; use production setup to generate `styles.css`.
-- **Favicon 404**: Inline SVG favicon fixes this. For GitHub Pages, verify paths or add `favicon.ico`.
-- **Syntax Error (`script.js`)**: Fixed `Unexpected end of input` by ensuring proper code structure.
-- **Hex Viewer Selection**: Fixed to highlight single bytes for SVG clicks; table clicks highlight ranges.
-- **Section Table**: “N/A” indicates metadata (e.g., encoding for text, hidden, locked) stored in the file system, not the binary.
-- **File Size Errors**: Keep files under 1MB.
-- **Browser Issues**: Use Chrome, Firefox, or Edge; older browsers may not support SVG/JavaScript.
-
-## Notes for Students
-
-- **Learning Objectives**:
-  - Explore file structures (headers, metadata, content) via the SVG grid and section table.
-  - Understand binary/hex with clickable rectangles and hex editing.
-  - Learn where file name, extension, encoding, and system metadata (created date/time, hidden, locked, deleted) are stored.
-  - Study cryptography through encryption/decryption.
-- **Limitations**:
-  - 1MB file size limit.
-  - SVG grid may be tall for large files; scroll to navigate.
-  - Tooltip hides after 2 seconds.
-  - System metadata (hidden, locked, deleted) and some encodings are not accessible via the File API.
-- **Customization**:
-  - Adjust SVG grid in `script.js` (`bytesPerRow`, `rectSize`).
-  - Change tooltip duration in `showByteTooltip` (`setTimeout`).
-  - Modify table rectangle size in `styles.css` (`.section-rect`).
-  - Customize theme colors in `styles.css` (CSS custom properties).
-  - Adjust loading spinner size or text in `styles.css` (`#loadingOverlay`).
+- **404 Errors**: Ensure `styles.css` and `script.js` are in the same directory as `index.html`. Check GitHub Pages settings.
+- **File Size**: Files over 1MB will show an error in the File Input card.
+- **Unsupported Formats**: Only txt, jpg, jpeg, png, docx, mp3, pdf, mp4 are supported.
+- **Modal Issues**: Ensure JavaScript console shows no errors for modal events; verify `infoModal` CSS.
+- **Highlighting**: Orange highlights appear only for MP3 (bytes 3-32) or DOCX (bytes 0-500); other files show “N/A” for File Name in the section table.
 
 ## License
-
-© 2025 File Analysis Tool. For educational use only. Modify and share in academic settings.
+For educational use only. © 2025 File Analysis Tool.

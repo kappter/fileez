@@ -1,146 +1,73 @@
+/* Tailwind CSS custom styles */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Custom styles for File Analysis Tool */
 :root {
-  --bg-primary: #f3f4f6;
-  --bg-card: #ffffff;
-  --text-primary: #1f2937;
-  --border-primary: #d1d5db;
-  --hex-bg: #f3f4f6;
-  --yellow-sensitive: #fefcbf;
-  --blue-header: #bfdbfe;
-  --green-content: #bbf7d0;
-  --svg-rect-gray: #c8c8c8;
   --tooltip-bg: #1f2937;
-  --tooltip-text: #ffffff;
-  --input-bg: #ffffff;
-  --button-bg-blue: #3b82f6;
-  --button-bg-green: #22c55e;
-  --button-bg-red: #ef4444;
-  --button-text: #ffffff;
-  --loading-bg: #6b7280;
-  --loading-text: #ffffff;
+  --tooltip-text: #f9fafb;
+  --border-color: #d1d5db;
+  --card-bg: #ffffff;
+  --card-text: #111827;
 }
 
 .dark {
-  --bg-primary: #111827;
-  --bg-card: #1f2937;
-  --text-primary: #f3f4f6;
-  --border-primary: #4b5563;
-  --hex-bg: #374151;
-  --yellow-sensitive: #facc15;
-  --blue-header: #2563eb;
-  --green-content: #22c55e;
-  --svg-rect-gray: #6b7280;
-  --tooltip-bg: #374151;
-  --tooltip-text: #f3f4f6;
-  --input-bg: #374151;
-  --button-bg-blue: #60a5fa;
-  --button-bg-green: #4ade80;
-  --button-bg-red: #f87171;
-  --button-text: #f3f4f6;
-  --loading-bg: #1f2937;
-  --loading-text: #f3f4f6;
-}
-
-body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  --tooltip-bg: #e5e7eb;
+  --tooltip-text: #111827;
+  --border-color: #4b5563;
+  --card-bg: #1f2937;
+  --card-text: #f9fafb;
 }
 
 .card {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-primary);
+  @apply p-4 rounded-lg shadow bg-[var(--card-bg)] text-[var(--card-text)];
 }
 
-#hexViewer {
-  background-color: var(--hex-bg);
-  color: var(--text-primary);
+#hexViewerContainer {
+  @apply fixed top-16 left-0 right-0 bg-[var(--card-bg)] shadow p-4 z-10;
 }
 
-.section-rect {
-  width: 16px;
-  height: 16px;
-  display: inline-block;
+#hexViewer, #asciiViewer {
+  @apply overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm;
 }
 
-.bg-yellow-200 {
-  background-color: var(--yellow-sensitive);
+#hexViewer span, #asciiViewer span {
+  @apply inline-block w-8 text-center;
 }
 
-.bg-blue-200 {
-  background-color: var(--blue-header);
-}
-
-.bg-green-200 {
-  background-color: var(--green-content);
-}
-
-footer {
-  background-color: var(--bg-card);
-  color: var(--text-primary);
+#fileSvg rect {
+  @apply cursor-pointer;
 }
 
 #byteTooltip {
-  background-color: var(--tooltip-bg);
-  color: var(--tooltip-text);
-}
-
-input[type="file"],
-input[type="range"],
-select,
-textarea {
-  background-color: var(--input-bg);
-  color: var(--text-primary);
-  border: 1px solid var(--border-primary);
-}
-
-#saveHex {
-  background-color: var(--button-bg-blue);
-  color: var(--button-text);
-}
-
-#encryptBtn {
-  background-color: var(--button-bg-green);
-  color: var(--button-text);
-}
-
-#decryptBtn {
-  background-color: var(--button-bg-red);
-  color: var(--button-text);
-}
-
-#fileSvg rect[fill="rgb(200, 200, 200)"] {
-  fill: var(--svg-rect-gray);
-}
-
-#sectionTable {
-  border: 1px solid var(--border-primary);
+  @apply absolute bg-[var(--tooltip-bg)] text-[var(--tooltip-text)] text-sm p-2 rounded shadow;
 }
 
 #sectionTable td {
-  border: 1px solid var(--border-primary);
+  @apply border p-2 border-[var(--border-color)];
 }
 
-#themeToggle:hover {
-  background-color: var(--border-primary);
+.section-rect {
+  @apply w-4 h-4 inline-block;
 }
 
 #loadingOverlay {
-  background-color: var(--loading-bg);
+  @apply fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50;
 }
 
-#loadingOverlay p {
-  color: var(--loading-text);
+#infoModal {
+  @apply fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+#infoModal .bg-white, #infoModal .dark:bg-gray-800 {
+  @apply p-6 rounded shadow max-w-lg w-full bg-[var(--card-bg)] text-[var(--card-text)];
 }
 
-.animate-spin {
-  animation: spin 1s linear infinite;
+#closeModal {
+  @apply mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-400;
+}
+
+.learn-more {
+  @apply text-blue-500 hover:underline text-sm cursor-pointer;
 }

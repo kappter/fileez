@@ -51,8 +51,8 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='gray'/><rect x='4' y='4' width='8' height='8' fill='blue'/></svg>">
   <link href="./styles.css" rel="stylesheet">
 </head>
-<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col">
-  <header class="bg-white dark:bg-gray-800 shadow p-4 flex justify-between items-center">
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex flex-col pt-20">
+  <header class="bg-white dark:bg-gray-800 shadow p-4 flex justify-between items-center fixed top-0 w-full z-20">
     <h1 class="text-2xl font-bold">File Analysis Tool</h1>
     <button id="themeToggle" class="p-2 rounded focus:outline-none">
       <svg id="themeIcon" class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
@@ -61,7 +61,15 @@
       </svg>
     </button>
   </header>
-  <main class="flex-grow max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+  <div id="hexViewerContainer" class="fixed top-16 left-0 right-0 bg-white dark:bg-gray-800 shadow p-4 z-10">
+    <h2 class="text-lg font-semibold mb-2">Hex Viewer</h2>
+    <div class="flex">
+      <div id="hexViewer" class="overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm flex-1"></div>
+      <div id="asciiViewer" class="overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm w-1/4"></div>
+    </div>
+    <button id="saveHex" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-400">Save Hex Changes</button>
+  </div>
+  <main class="flex-grow max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 mt-48">
     <!-- Left Column: File Input, Graphical View, Metadata, Section Table -->
     <div class="space-y-4">
       <div class="bg-white dark:bg-gray-800 p-4 rounded shadow card">
@@ -85,13 +93,8 @@
         <table id="sectionTable" class="border-collapse border w-full"></table>
       </div>
     </div>
-    <!-- Right Column: Hex Viewer, Scrubber, Encryption, Binary Sample -->
+    <!-- Right Column: Scrubber, Encryption, Binary Sample -->
     <div class="space-y-4">
-      <div class="bg-white dark:bg-gray-800 p-4 rounded shadow card sticky top-4">
-        <h2 class="text-lg font-semibold mb-2">Hex Viewer</h2>
-        <div id="hexViewer" class="overflow-auto max-h-96 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm"></div>
-        <button id="saveHex" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-400">Save Hex Changes</button>
-      </div>
       <div class="bg-white dark:bg-gray-800 p-4 rounded shadow card">
         <h2 class="text-lg font-semibold mb-2">Scrubber</h2>
         <input type="range" id="scrubber" min="0" max="0" value="0" class="w-full">
@@ -117,6 +120,14 @@
       </div>
     </div>
   </main>
+  <!-- Modal for File Name/Extension Explanation -->
+  <div id="infoModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 p-6 rounded shadow max-w-lg w-full">
+      <h2 class="text-lg font-semibold mb-4" id="modalTitle"></h2>
+      <p id="modalContent" class="text-sm"></p>
+      <button id="closeModal" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-400">Close</button>
+    </div>
+  </div>
   <div id="loadingOverlay" class="hidden fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50">
     <div class="flex flex-col items-center">
       <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
