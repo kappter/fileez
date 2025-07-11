@@ -54,6 +54,44 @@
             </p>
         </div>
 
+        <!-- Filename Explanation Section (NEW) -->
+        <div id="filenameExplanationSection" class="mb-8 p-6 bg-card-bg rounded-lg shadow-inner hidden">
+            <h2 class="text-2xl font-bold text-card-text mb-4">Filename & Extension Storage Explained</h2>
+            <p class="text-text mb-3">
+                A common question in file science is: "Where is the actual filename and extension stored within a file?"
+                The answer is crucial for understanding how operating systems and file formats work.
+            </p>
+
+            <h3 class="text-xl font-semibold text-card-text mb-2">1. File System Metadata (The Primary Location)</h3>
+            <ul class="list-disc list-inside text-text mb-3 pl-4">
+                <li>The filename (e.g., `document.pdf`) and its extension (`.pdf`) are **primarily stored as metadata by the operating system's file system**, not usually *inside* the file's actual content.</li>
+                <li><span class="font-bold">Analogy:</span> Think of a library. The book's title (filename) and its category (extension) are written on the spine of the book and recorded in the library's catalog (the file system). The actual *content* of the book (the story, the images) is *inside* the book. If you change the title in the catalog, the content of the book doesn't change.</li>
+                <li><span class="font-bold">In this tool:</span> The "File Information" section above (Name, Size, Type, Last Modified) shows you this **file system metadata**. When you selected <span id="currentFileNameInExplanation" class="font-bold text-accent-color"></span>, the browser's JavaScript `File` API provided this information directly from your operating system.</li>
+            </ul>
+
+            <h3 class="text-xl font-semibold text-card-text mb-2">2. Embedded Filenames and Internal Metadata (Exceptions)</h3>
+            <p class="text-text mb-3">
+                While the file system manages the primary filename, some file formats *do* embed internal names or other identifying information within their own structure. This is less about the *operating system's* filename and more about the *file format's internal organization*.
+            </p>
+            <ul class="list-disc list-inside text-text mb-3 pl-4">
+                <li><span class="font-bold">Examples:</span>
+                    <ul class="list-circle list-inside ml-4">
+                        <li><span class="font-semibold">ZIP Archives (.zip, .docx, .xlsx, .pptx):</span> These contain other files. The names of the files *within* the archive are listed in the ZIP's internal directory structure.</li>
+                        <li><span class="font-semibold">Media Files (.mp3, .jpeg, .png):</span> Often have metadata sections (like ID3 tags in MP3s, EXIF data in JPEGs) storing "Title," "Artist," "Original Filename," etc.</li>
+                        <li><span class="font-semibold">PDF Documents:</span> Can contain a "Title" field in their metadata, which might differ from the OS filename.</li>
+                    </ul>
+                </li>
+                <li><span class="font-bold">How to Explore in This Tool:</span>
+                    <p class="text-text mt-2">
+                        If a file format embeds its own name, that name would be part of the file's **payload data** (the actual bytes).
+                        Use the <span class="font-bold text-accent-color">"Scrub Tool"</span> to navigate through the file's bytes and the
+                        <span class="font-bold text-accent-color">"Hexadecimal Data"</span> display to inspect the raw hex and ASCII values.
+                        For example, try uploading a small `.zip` file and look for the names of the files inside it within the hex dump!
+                    </p>
+                </li>
+            </ul>
+        </div>
+
         <!-- Metadata and Header Information Section -->
         <div id="metadataSection" class="mb-8 p-6 bg-card-bg rounded-lg shadow-inner hidden">
             <h2 class="text-2xl font-bold text-card-text mb-4">Metadata & Header Analysis</h2>
