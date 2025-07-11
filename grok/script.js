@@ -251,6 +251,7 @@ function generateSectionTable(ranges, ext) {
   const sections = [
     { name: 'File Name', range: ranges.find(r => r.name === 'File Name')?.range || null, color: 'bg-yellow-200' },
     { name: 'Extension', range: ranges.find(r => r.name === 'Extension')?.range || null, color: 'bg-yellow-200' },
+    { name: 'Encoding', range: ranges.find(r => r.name === 'Encoding')?.range || null, color: 'bg-yellow-200' },
     { name: 'Created Date/Time', range: null, color: 'bg-yellow-200' },
     { name: 'Last Modified Date/Time', range: null, color: 'bg-yellow-200' },
     { name: 'Hidden', range: null, color: 'bg-yellow-200' },
@@ -297,6 +298,9 @@ async function generateSectionRanges(file, buffer, ext) {
   ranges.push({ name: 'File Name', range: null });
   ranges.push({ name: 'Extension', range: null });
   
+  // Encoding range (set for specific formats below)
+  ranges.push({ name: 'Encoding', range: null });
+  
   // Headers (from existing headerRanges)
   if (headerRanges.length > 0) {
     ranges.push({ name: 'Headers', range: headerRanges[0] });
@@ -306,22 +310,24 @@ async function generateSectionRanges(file, buffer, ext) {
   const contentStart = headerRanges.length > 0 ? headerRanges[0][1] + 1 : 0;
   ranges.push({ name: 'Content', range: [contentStart, buffer.length - 1] });
   
-  // MP3: File name in ID3 tags
+  // MP3: File name in ID3 tags, encoding in frame headers
   if (ext === 'mp3' && buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
     ranges.find(r => r.name === 'File Name').range = [3, 32]; // Title field in ID3v1
+    ranges.find(r => r.name === 'Encoding').range = [128, 131]; // First frame header
   }
   
-  // DOCX: File name in docProps/core.xml
+  // DOCX: File name and encoding in docProps/core.xml
   if (ext === 'docx') {
     try {
       const zip = await JSZip.loadAsync(buffer);
       if (zip.file('docProps/core.xml')) {
         ranges.find(r => r.name === 'File Name').range = [0, 500]; // Approximate ZIP metadata
+        ranges.find(r => r.name === 'Encoding').range = [0, 500]; // XML encoding
       }
     } catch (e) {}
   }
   
-  return ranges.filter(r => r.range || r.name === 'File Name' || r.name === 'Extension');
+  return ranges.filter(r => r.range || ['File Name', 'Extension', 'Encoding', 'Created Date/Time', 'Last Modified Date/Time', 'Hidden', 'Locked', 'Deleted'].includes(r.name));
 }
 
 // Initialize scrubber
@@ -352,14 +358,26 @@ function formatDate(timestamp) {
   return date.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+// Detect text encoding
+function detectTextEncoding(buffer) {
+  const bom = buffer.slice(0, 3);
+  if (bom[0] === 0xEF && bom[1] === 0xBB && bom[2] === 0xBF) return 'UTF-8';
+  if (bom[0] === 0xFF && bom[1] === 0xFE) return 'UTF-16 LE';
+  if (bom[0] === 0xFE && bom[1] === 0xFF) return 'UTF-16 BE';
+  const sample = String.fromCharCode(...buffer.slice(0, 1000));
+  const result = jschardet.detect(sample);
+  return result.confidence > 0.5 ? result.encoding : 'ASCII';
+}
+
 // Parse text metadata
-function parseTextMetadata(file) {
+function parseTextMetadata(file, buffer) {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => {
       const name = file.name.split('.').slice(0, -1).join('.');
       const ext = file.name.split('.').pop().toLowerCase();
-      resolve(`File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: text/plain<br>Sample Content: ${reader.result.slice(0, 100)}...<br>Note: File name and extension are managed by the file system, not stored in the binary.`);
+      const encoding = detectTextEncoding(buffer);
+      resolve(`File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: text/plain<br>Sample Content: ${reader.result.slice(0, 100)}...<br>Note: File name and extension are managed by the file system, not stored in the binary.`);
     };
     reader.readAsText(file);
   });
@@ -376,15 +394,17 @@ function parseTextHeaders(file) {
 }
 
 // Parse image metadata
-function parseImageMetadata(file) {
+function parseImageMetadata(file, buffer) {
   return new Promise((resolve) => {
     window.EXIF.getData(file, function() {
       const exifData = window.EXIF.getAllTags(this);
       const name = file.name.split('.').slice(0, -1).join('.');
       const ext = file.name.split('.').pop().toLowerCase();
+      const encoding = ext === 'jpg' || ext === 'jpeg' ? 'JPEG DCT' : 'PNG DEFLATE';
       const metadata = [
         `File Name: ⚠️ ${name}`,
         `Extension: ${ext}`,
+        `Encoding: ${encoding}`,
         `Created Date/Time: ${formatDate(file.lastModified)}`,
         `Last Modified Date/Time: ${formatDate(file.lastModified)}`,
         `Hidden: N/A (file system metadata, not accessible via File API)`,
@@ -440,9 +460,9 @@ async function parseDocxMetadata(file, buffer) {
         created: xml.querySelector('created')?.textContent,
         modified: xml.querySelector('modified')?.textContent
       };
-      return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.modified || 'N/A'}<br>Note: File name may be stored in docProps/core.xml (bytes 0-500).`;
+      return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: UTF-8 (XML)<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.modified || 'N/A'}<br>Note: File name and encoding may be stored in docProps/core.xml (bytes 0-500).`;
     }
-    return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No detailed metadata available.<br>Note: File name and extension are managed by the file system.`;
+    return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: N/A<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No detailed metadata available.<br>Note: File name and extension are managed by the file system.`;
   } catch (e) {
     return `Error parsing docx metadata: ${e.message}`;
   }
@@ -472,19 +492,23 @@ function parseMp3Metadata(file, buffer) {
   const name = file.name.split('.').slice(0, -1).join('.');
   const ext = file.name.split('.').pop().toLowerCase();
   const id3 = buffer.slice(0, 128);
+  let encoding = 'N/A';
+  if (buffer.length > 131 && buffer[128] === 0xFF && (buffer[129] & 0xE0) === 0xE0) {
+    encoding = 'MPEG-1 Layer III';
+  }
   if (id3[0] === 0x54 && id3[1] === 0x41 && id3[2] === 0x47) {
     const title = String.fromCharCode(...id3.slice(3, 33)).trim();
     const artist = String.fromCharCode(...id3.slice(33, 63)).trim();
     const album = String.fromCharCode(...id3.slice(63, 93)).trim();
-    return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Title: ⚠️ ${title || 'N/A'} (bytes 3-32)<br>Artist: ⚠️ ${artist || 'N/A'}<br>Album: ${album || 'N/A'}<br>Note: File name may be stored in ID3v1 title (bytes 3-32).`;
+    return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Title: ⚠️ ${title || 'N/A'} (bytes 3-32)<br>Artist: ⚠️ ${artist || 'N/A'}<br>Album: ${album || 'N/A'}<br>Note: File name may be stored in ID3v1 title (bytes 3-32); encoding in frame headers (bytes 128-131).`;
   }
-  return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No ID3v1 metadata found.<br>Note: File name and extension are managed by the file system.`;
+  return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No ID3v1 metadata found.<br>Note: File name and extension are managed by the file system.`;
 }
 
 // Parse mp3 sensitive ranges
 function parseMp3Sensitive(file, buffer) {
   if (buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
-    return [[0, 128]]; // ID3v1 tag at start
+    return [[0, 128], [128, 131]]; // ID3v1 tag and first frame header
   }
   return [];
 }
@@ -498,7 +522,8 @@ function parseMp3Headers(file, buffer) {
 function parseGenericMetadata(file) {
   const name = file.name.split('.').slice(0, -1).join('.');
   const ext = file.name.split('.').pop().toLowerCase();
-  return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No specific metadata parser available.<br>Note: File name and extension are managed by the file system.`;
+  const encoding = ext === 'pdf' ? 'ASCII/UTF-8' : ext === 'mp4' ? 'H.264/AAC' : 'N/A';
+  return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No specific metadata parser available.<br>Note: File name and extension are managed by the file system.`;
 }
 
 // Parse generic sensitive ranges
