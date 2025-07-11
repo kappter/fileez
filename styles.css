@@ -1,0 +1,73 @@
+/* Tailwind CSS custom styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for File Analysis Tool */
+:root {
+  --tooltip-bg: #1f2937;
+  --tooltip-text: #f9fafb;
+  --border-color: #d1d5db;
+  --card-bg: #ffffff;
+  --card-text: #111827;
+}
+
+.dark {
+  --tooltip-bg: #e5e7eb;
+  --tooltip-text: #111827;
+  --border-color: #4b5563;
+  --card-bg: #1f2937;
+  --card-text: #f9fafb;
+}
+
+.card {
+  @apply p-4 rounded-lg shadow bg-[var(--card-bg)] text-[var(--card-text)];
+}
+
+#hexViewerContainer {
+  @apply fixed top-16 left-0 right-0 bg-[var(--card-bg)] shadow p-4 z-10;
+}
+
+#hexViewer, #asciiViewer {
+  @apply overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm;
+}
+
+#hexViewer span, #asciiViewer span {
+  @apply inline-block w-8 text-center;
+}
+
+#fileSvg rect {
+  @apply cursor-pointer;
+}
+
+#byteTooltip {
+  @apply absolute bg-[var(--tooltip-bg)] text-[var(--tooltip-text)] text-sm p-2 rounded shadow;
+}
+
+#sectionTable td {
+  @apply border p-2 border-[var(--border-color)];
+}
+
+.section-rect {
+  @apply w-4 h-4 inline-block;
+}
+
+#loadingOverlay {
+  @apply fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50;
+}
+
+#infoModal {
+  @apply fixed inset-0 bg-gray-500 bg-opacity-50 flex items-center justify-center z-50;
+}
+
+#infoModal .bg-white, #infoModal .dark:bg-gray-800 {
+  @apply p-6 rounded shadow max-w-lg w-full bg-[var(--card-bg)] text-[var(--card-text)];
+}
+
+#closeModal {
+  @apply mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-400;
+}
+
+.learn-more {
+  @apply text-blue-500 hover:underline text-sm cursor-pointer;
+}
