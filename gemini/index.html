@@ -85,6 +85,18 @@
                 <input type="number" id="lengthInput" min="1" value="256"
                        class="w-full sm:w-32 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/>
             </div>
+            <div class="flex flex-col sm:flex-row items-center gap-4 mb-4">
+                <label for="encodingSelect" class="font-semibold text-gray-700 whitespace-nowrap">Text Encoding:</label>
+                <select id="encodingSelect" class="w-full sm:w-48 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="utf-8">UTF-8</option>
+                    <option value="utf-16le">UTF-16 LE</option>
+                    <option value="utf-16be">UTF-16 BE</option>
+                    <option value="iso-8859-1">ISO-8859-1 (Latin-1)</option>
+                </select>
+            </div>
+            <p class="text-sm text-gray-600 mt-2">
+                The "ASCII" interpretation relies on the selected text encoding. For binary files, this may not be meaningful.
+            </p>
             <div class="text-sm text-gray-600">
                 <p>Currently Viewing: <span id="currentViewRange">0 - 255</span></p>
             </div>
