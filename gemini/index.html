@@ -1,112 +1,149 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>File Analysis Tool</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='blue'/></svg>" type="image/svg+xml">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-  <link href="styles.css" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Analysis Tool</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-100 p-4">
-  <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-md">
-    <h1 class="text-2xl font-bold mb-4">File Analysis Tool</h1>
-    <input type="file" id="fileInput" class="mb-4 p-2 border rounded" accept=".txt,.jpg,.jpeg,.png,.docx,.mp3,.pdf,.mp4">
-    <p id="error" class="text-red-500 hidden"></p>
+<body class="p-6">
+    <div class="max-w-7xl mx-auto bg-white p-8 rounded-xl shadow-lg">
+        <h1 class="text-4xl font-extrabold text-center text-indigo-700 mb-8">File Analysis Tool</h1>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- Graphical View and Hex Viewer -->
-      <div>
-        <h2 class="text-xl font-semibold mb-2">Graphical View (Scrollable)</h2>
-        <div class="w-full h-64 overflow-auto border rounded mb-2">
-          <svg id="fileSvg" width="160" height="0"></svg>
+        <!-- File Upload Section -->
+        <div class="mb-8 p-6 bg-indigo-50 rounded-lg shadow-inner">
+            <label for="fileInput" class="block text-xl font-semibold text-indigo-800 mb-4">Upload a File (Max 100KB):</label>
+            <input type="file" id="fileInput" class="block w-full text-lg text-gray-700
+                                                file:mr-4 file:py-2 file:px-4
+                                                file:rounded-full file:border-0
+                                                file:text-sm file:font-semibold
+                                                file:bg-indigo-500 file:text-white
+                                                hover:file:bg-indigo-600 cursor-pointer"/>
+            <p id="fileError" class="text-red-600 mt-2 font-medium"></p>
         </div>
-        <div class="text-sm mb-2">
-          <p><span class="inline-block w-4 h-4 bg-yellow-200"></span> Metadata (Potentially Sensitive)</p>
-          <p><span class="inline-block w-4 h-4 bg-blue-200"></span> File System/Headers</p>
-          <p><span class="inline-block w-4 h-4 bg-green-200"></span> Content</p>
-          <p><span class="inline-block w-4 h-4 bg-gray-200"></span> Unknown/Other</p>
-        </div>
-        <h2 class="text-xl font-semibold mb-2">Hex Viewer (Sensitive Data Highlighted)</h2>
-        <div id="hexViewer" class="w-full h-64 p-2 border rounded font-mono text-sm overflow-auto" contenteditable="true"></div>
-        <button id="saveHex" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Save Hex Changes</button>
-        <div class="mt-2">
-          <label for="scrubber" class="block text-sm font-medium">Scrub through file:</label>
-          <input type="range" id="scrubber" min="0" max="0" value="0" class="w-full">
-          <p id="scrubberPos" class="text-sm">Position: 0</p>
-        </div>
-      </div>
 
-      <!-- Metadata and Binary Output -->
-      <div>
-        <h2 class="text-xl font-semibold mb-2">Metadata</h2>
-        <pre id="metadata" class="bg-gray-50 p-2 border rounded h-32 overflow-auto text-sm"></pre>
-        <h2 class="text-xl font-semibold mt-4 mb-2">Binary Sample</h2>
-        <pre id="binaryOutput" class="bg-gray-50 p-2 border rounded h-32 overflow-auto text-sm"></pre>
-      </div>
+        <!-- File Information Section -->
+        <div id="fileInfo" class="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">File Information</h2>
+            <p><span class="font-semibold">Name:</span> <span id="fileName"></span></p>
+            <p><span class="font-semibold">Size:</span> <span id="fileSize"></span> bytes</p>
+            <p><span class="font-semibold">Type:</span> <span id="fileType"></span></p>
+            <p><span class="font-semibold">Last Modified:</span> <span id="fileLastModified"></span></p>
+        </div>
+
+        <!-- Metadata and Header Information Section -->
+        <div id="metadataSection" class="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Metadata & Header Analysis</h2>
+            <div id="fileMetadata" class="monospace-font text-sm text-gray-700 whitespace-pre-wrap"></div>
+            <div id="headerAnalysis" class="mt-4 p-4 border border-blue-300 bg-blue-50 rounded-md">
+                <h3 class="text-xl font-semibold text-blue-800 mb-2">Identified Header Information:</h3>
+                <p class="text-sm text-blue-700 mb-2">
+                    <span class="font-bold">Note on "Security Sections":</span> In this learning tool, "security sections" refer to critical identifying information (like file headers/magic numbers) that define the file's type and structure. While not inherently "secret," understanding these bytes is fundamental to file integrity and analysis.
+                </p>
+                <div id="headerDetails" class="monospace-font text-sm text-gray-700 whitespace-pre-wrap"></div>
+            </div>
+        </div>
+
+        <!-- Graphical View Section -->
+        <div id="graphicalViewSection" class="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Graphical File Structure View</h2>
+            <p class="text-sm text-gray-700 mb-4">
+                This visualization represents the file's bytes as colored rectangles.
+                <span class="font-bold">Note:</span> For simplicity in this learning tool, the first 64 bytes are categorized as "Header/Metadata", and the rest as "Payload Data".
+            </p>
+            <div class="flex items-center gap-4 mb-4">
+                <span class="inline-block w-6 h-6 rounded-sm bg-blue-500"></span> <span class="text-gray-700">Header/Metadata</span>
+                <span class="inline-block w-6 h-6 rounded-sm bg-emerald-500"></span> <span class="text-gray-700">Payload Data</span>
+                <span class="inline-block w-6 h-6 rounded-sm bg-amber-500"></span> <span class="text-gray-700">Selected Byte</span>
+            </div>
+            <div class="overflow-y-auto max-h-96 border border-gray-200 rounded-md">
+                <canvas id="graphicalViewCanvas" width="700"></canvas>
+            </div>
+            <p id="byteInfoDisplay" class="mt-4 text-sm text-gray-700">Click a byte in the graphical view to see its details.</p>
+        </div>
+
+
+        <!-- Scrub Tool Section -->
+        <div id="scrubToolSection" class="mb-8 p-6 bg-gray-50 rounded-lg shadow-inner hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Scrub Tool (View Specific Range)</h2>
+            <div class="flex flex-col sm:flex-row items-center gap-4 mb-4">
+                <label for="offsetInput" class="font-semibold text-gray-700">Offset (bytes):</label>
+                <input type="number" id="offsetInput" min="0" value="0"
+                       class="w-full sm:w-32 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/>
+                <label for="lengthInput" class="font-semibold text-gray-700">Length (bytes):</label>
+                <input type="number" id="lengthInput" min="1" value="256"
+                       class="w-full sm:w-32 p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"/>
+                <button id="applyScrub" class="mt-4 sm:mt-0 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-md hover:bg-indigo-700 transition duration-200">Apply</button>
+            </div>
+            <div class="text-sm text-gray-600">
+                <p>Current View: <span id="currentViewRange">0 - 255</span></p>
+            </div>
+        </div>
+
+        <!-- Hex and Binary Data Display Section -->
+        <div id="dataDisplaySection" class="grid grid-cols-1 lg:grid-cols-2 gap-8 hidden">
+            <!-- Hex Data Display -->
+            <div class="p-6 bg-gray-50 rounded-lg shadow-inner">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Hexadecimal Data (Click to Edit)</h2>
+                <div id="hexData" class="monospace-font text-sm text-gray-700 whitespace-pre-wrap overflow-auto scrollable-content max-h-96 border border-gray-200 p-2 rounded-md"></div>
+            </div>
+
+            <!-- Binary Data Display -->
+            <div class="p-6 bg-gray-50 rounded-lg shadow-inner">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">Binary Data</h2>
+                <div id="binaryData" class="monospace-font text-sm text-gray-700 whitespace-pre-wrap overflow-auto scrollable-content max-h-96 border border-gray-200 p-2 rounded-md"></div>
+            </div>
+        </div>
+
+        <!-- Encryption/Decryption Section -->
+        <div id="encryptionSection" class="mt-8 p-6 bg-purple-50 rounded-lg shadow-inner hidden">
+            <h2 class="text-2xl font-bold text-purple-800 mb-4">Encryption/Decryption Tool (Caesar Cipher)</h2>
+            <p class="text-sm text-purple-700 mb-4">
+                This tool demonstrates character-based encryption/decryption. The Caesar cipher operates on the ASCII representation of the file's content. For binary files, the output may not be human-readable.
+            </p>
+            <div class="flex flex-col sm:flex-row items-center gap-4 mb-4">
+                <label for="cipherSelect" class="font-semibold text-purple-700">Cipher Type:</label>
+                <select id="cipherSelect" class="w-full sm:w-48 p-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500">
+                    <option value="caesar">Caesar Cipher</option>
+                </select>
+
+                <label for="shiftKeyInput" class="font-semibold text-purple-700">Shift Key (0-25):</label>
+                <input type="number" id="shiftKeyInput" min="0" max="25" value="3"
+                       class="w-full sm:w-24 p-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"/>
+
+                <button id="encryptButton" class="mt-4 sm:mt-0 px-6 py-2 bg-purple-600 text-white font-semibold rounded-md shadow-md hover:bg-purple-700 transition duration-200">Encrypt</button>
+                <button id="decryptButton" class="mt-4 sm:mt-0 px-6 py-2 bg-purple-600 text-white font-semibold rounded-md shadow-md hover:bg-purple-700 transition duration-200">Decrypt</button>
+            </div>
+            <div class="mt-4">
+                <h3 class="text-xl font-semibold text-purple-700 mb-2">Encrypted/Decrypted Output:</h3>
+                <textarea id="cipherOutput" class="w-full h-48 p-3 border border-gray-300 rounded-md monospace-font text-sm bg-gray-50 resize-y" readonly placeholder="Encrypted or decrypted text will appear here."></textarea>
+            </div>
+            <p id="cipherError" class="text-red-600 mt-2 font-medium"></p>
+        </div>
+
     </div>
 
-    <!-- Encryption Section -->
-    <div class="mt-6">
-      <h2 class="text-xl font-semibold mb-2">Encryption Analysis</h2>
-      <div class="flex gap-4 mb-2">
-        <select id="cipherSelect" class="p-2 border rounded">
-          <option value="caesar">Caesar Cipher</option>
-          <option value="aes">AES-256</option>
-          <option value="xor">XOR Cipher</option>
-        </select>
-        <input type="text" id="cipherKey" class="p-2 border rounded" placeholder="Enter key (e.g., 3 for Caesar, password for AES)">
-        <button id="encryptBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Encrypt</button>
-        <button id="decryptBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Decrypt</button>
-      </div>
-      <textarea id="encryptedOutput" class="w-full h-32 p-2 border rounded font-mono text-sm" placeholder="Encrypted hex will appear here..."></textarea>
+    <!-- Modal for Hex Editing -->
+    <div id="editModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Edit Hex Byte</h3>
+            <p class="mb-2">Offset: <span id="modalOffset" class="font-semibold"></span></p>
+            <p class="mb-4">Current Value: <span id="modalCurrentValue" class="font-semibold"></span></p>
+            <label for="newHexValue" class="block text-lg font-semibold text-gray-700 mb-2">New Hex Value (00-FF):</label>
+            <input type="text" id="newHexValue" maxlength="2"
+                   class="w-full p-3 border border-gray-300 rounded-md text-xl monospace-font uppercase focus:ring-indigo-500 focus:border-indigo-500"/>
+            <p id="modalError" class="text-red-600 mt-2 font-medium"></p>
+            <div class="flex justify-end gap-4 mt-6">
+                <button id="cancelEdit" class="px-6 py-2 bg-gray-300 text-gray-800 font-semibold rounded-md hover:bg-gray-400 transition duration-200">Cancel</button>
+                <button id="saveEdit" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md shadow-md hover:bg-indigo-700 transition duration-200">Save</button>
+            </div>
+        </div>
     </div>
 
-    <!-- Byte Tooltip -->
-    <div id="byteTooltip"></div>
-  </div>
-  <script src="script.js"></script>
+    <!-- Link to external JavaScript file -->
+    <script src="script.js"></script>
 </body>
 </html>
