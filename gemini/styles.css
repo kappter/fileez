@@ -65,9 +65,16 @@ body {
 
 /* Canvas styling */
 #graphicalViewCanvas {
-    border: 1px solid #cbd5e1; /* slate-300 */
+    /* The width is fixed at 700px in HTML, height is dynamic in JS */
+    /* This ensures consistent byte block sizing */
     background-color: #f8fafc; /* slate-50 */
     display: block; /* Remove extra space below canvas */
-    width: 100%; /* Make canvas responsive to its container */
-    height: auto; /* Maintain aspect ratio */
+    /* No fixed height here, it's set by JS */
+}
+/* Container for the canvas to make it scrollable */
+#graphicalViewSection > div:first-of-type {
+    max-height: 24rem; /* max-h-96 */
+    overflow-y: auto;
+    border: 1px solid #cbd5e1; /* slate-300 */
+    border-radius: 0.375rem; /* rounded-md */
 }
