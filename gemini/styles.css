@@ -1,50 +1,73 @@
-/* ... (existing style.css content) */
-
-#encryption-section {
-    padding-top: 20px;
-    margin-top: 20px;
-    border-top: 1px solid #eee;
+/* Custom styles for better readability and monospace fonts */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f0f4f8; /* Light gray background */
+    color: #334155; /* Dark slate gray text */
+}
+.monospace-font {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+}
+/* Scrollbar styling for data display areas */
+.scrollable-content::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.scrollable-content::-webkit-scrollbar-track {
+    background: #e2e8f0; /* Light track */
+    border-radius: 10px;
+}
+.scrollable-content::-webkit-scrollbar-thumb {
+    background: #94a3b8; /* Gray thumb */
+    border-radius: 10px;
+}
+.scrollable-content::-webkit-scrollbar-thumb:hover {
+    background: #64748b; /* Darker gray on hover */
 }
 
-.encryption-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 20px;
-}
-
-.encryption-controls select,
-.encryption-controls input[type="number"],
-.encryption-controls input[type="text"] {
-    padding: 8px 12px;
-    border: 1px solid #ccc;
+/* Style for editable hex cells */
+.hex-byte-editable {
+    cursor: pointer;
+    padding: 1px 2px;
     border-radius: 4px;
-    font-size: 1em;
+    transition: background-color 0.2s ease-in-out;
+}
+.hex-byte-editable:hover {
+    background-color: #e0e7ff; /* Light blue on hover */
+}
+.hex-byte-editable.selected {
+    background-color: #a78bfa; /* Purple when selected */
+    color: white;
+    font-weight: bold;
 }
 
-.encryption-controls button {
-    margin-top: 0; /* Override previous margin */
-    padding: 10px 18px;
+/* Modal styling */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+.modal-content {
+    background-color: white;
+    padding: 2rem;
+    border-radius: 0.75rem; /* rounded-xl */
+    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+    max-width: 90%;
+    max-height: 90%;
+    overflow-y: auto;
 }
 
-.encryption-preview {
-    background-color: #f0f0f0;
-    border: 1px dashed #bbb;
-    padding: 15px;
-    border-radius: 5px;
-    font-family: 'Roboto Mono', 'Courier New', monospace;
-    font-size: 0.9em;
-    color: #444;
-    max-height: 200px; /* Limit height for previews */
-    overflow-y: auto; /* Scroll if content exceeds height */
-    white-space: pre-wrap; /* Wrap long lines */
-    word-break: break-all; /* Break words for long unreadable strings */
-}
-
-.info-note {
-    font-style: italic;
-    color: #666;
-    font-size: 0.9em;
-    margin-top: 15px;
+/* Canvas styling */
+#graphicalViewCanvas {
+    border: 1px solid #cbd5e1; /* slate-300 */
+    background-color: #f8fafc; /* slate-50 */
+    display: block; /* Remove extra space below canvas */
+    width: 100%; /* Make canvas responsive to its container */
+    height: auto; /* Maintain aspect ratio */
 }
