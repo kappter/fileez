@@ -10,7 +10,6 @@ const fileMetadata = document.getElementById('fileMetadata');
 const headerAnalysis = document.getElementById('headerAnalysis');
 const headerDetails = document.getElementById('headerDetails');
 const scrubToolSection = document.getElementById('scrubToolSection');
-// Renamed from offsetInput to scrubSlider and added currentOffsetDisplay
 const scrubSlider = document.getElementById('scrubSlider');
 const currentOffsetDisplay = document.getElementById('currentOffsetDisplay');
 const lengthInput = document.getElementById('lengthInput');
@@ -45,6 +44,9 @@ const byteInfoDisplay = document.getElementById('byteInfoDisplay');
 // Encoding selection element
 const encodingSelect = document.getElementById('encodingSelect');
 
+// Theme toggle button
+const themeToggle = document.getElementById('themeToggle');
+
 
 const MAX_FILE_SIZE = 100 * 1024; // 100 KB in bytes
 let currentFileBuffer = null; // Stores the ArrayBuffer of the current file
@@ -52,13 +54,40 @@ let currentViewOffset = 0;
 let currentViewLength = 256; // Default view length
 let currentEncoding = 'utf-8'; // Default encoding
 
-// Define colors for graphical view
+// Define colors for graphical view (these are hardcoded for canvas, as canvas doesn't directly use CSS vars)
 const COLOR_HEADER_METADATA = '#3B82F6'; // Tailwind blue-500
 const COLOR_PAYLOAD_DATA = '#10B981';    // Tailwind emerald-500
 const COLOR_HIGHLIGHT = '#F59E0B';       // Tailwind amber-500 for clicked byte
 const HEADER_METADATA_BYTES = 64; // First 64 bytes for header/metadata
 
 const BYTES_PER_ROW_GRAPHICAL = 64; // Fixed number of bytes to display per row in graphical view
+
+// --- Theme Toggle Logic ---
+/**
+ * Applies the stored theme preference or defaults to light mode.
+ */
+function applyThemePreference() {
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+    }
+}
+
+/**
+ * Toggles the dark/light theme and saves the preference.
+ */
+function toggleTheme() {
+    document.documentElement.classList.toggle('dark');
+    const newTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    localStorage.setItem('theme', newTheme);
+}
+
+// Apply theme on initial load
+applyThemePreference();
+themeToggle.addEventListener('click', toggleTheme);
+
 
 // --- Utility Functions ---
 
@@ -107,7 +136,7 @@ function formatHexWithAscii(buffer, offset, length, highlightOffset = -1) {
         const currentLineOffset = offset + i;
 
         // Offset
-        formattedOutput += `<span class="text-gray-500">${currentLineOffset.toString(16).padStart(8, '0').toUpperCase()}: </span>`;
+        formattedOutput += `<span class="text-secondary-text">${currentLineOffset.toString(16).padStart(8, '0').toUpperCase()}: </span>`;
 
         // Hex values
         for (let j = 0; j < bytesPerLine; j++) {
@@ -156,7 +185,7 @@ function formatBinary(buffer, offset, length) {
         const currentLineOffset = offset + i;
 
         // Offset
-        formattedOutput += `<span class="text-gray-500">${currentLineOffset.toString(16).padStart(8, '0').toUpperCase()}: </span>`;
+        formattedOutput += `<span class="text-secondary-text">${currentLineOffset.toString(16).padStart(8, '0').toUpperCase()}: </span>`;
 
         // Binary values
         for (let j = 0; j < bytesPerLine; j++) {
@@ -508,15 +537,13 @@ encodingSelect.addEventListener('change', (event) => {
     if (currentFileBuffer) {
         renderFileData(); // Re-render hex data with new encoding
         // Re-render byte info display if a byte is currently selected
-        // This part needs to be handled carefully as the graphical view doesn't directly depend on encoding
-        // but the byteInfoDisplay does.
         const currentHighlightedByte = graphicalViewCanvas.dataset.highlightedByte;
         if (currentHighlightedByte) {
             const byteIndex = parseInt(currentHighlightedByte, 10);
             const byteValue = new Uint8Array(currentFileBuffer)[byteIndex];
             const hex = byteValue.toString(16).padStart(2, '0');
             const binary = byteValue.toString(2).padStart(8, '0');
-            const textDecoder = new TextDecoder(currentEncoding, { fatal: false });
+            const textDecoder = new TextDecoder(currentEncoding, { fatal: false }); // Use currentEncoding
             const ascii = textDecoder.decode(new Uint8Array([byteValue]));
 
             byteInfoDisplay.innerHTML = `
