@@ -1,635 +1,439 @@
 const fileInput = document.getElementById('fileInput');
-const fileError = document.getElementById('fileError');
-const fileInfo = document.getElementById('fileInfo');
-const fileName = document.getElementById('fileName');
-const fileSize = document.getElementById('fileSize');
-const fileType = document.getElementById('fileType');
-const fileLastModified = document.getElementById('fileLastModified');
-const metadataSection = document.getElementById('metadataSection');
-const fileMetadata = document.getElementById('fileMetadata');
-const headerAnalysis = document.getElementById('headerAnalysis');
-const headerDetails = document.getElementById('headerDetails');
-const scrubToolSection = document.getElementById('scrubToolSection');
-const offsetInput = document.getElementById('offsetInput');
-const lengthInput = document.getElementById('lengthInput');
-const applyScrub = document.getElementById('applyScrub');
-const currentViewRange = document.getElementById('currentViewRange');
-const dataDisplaySection = document.getElementById('dataDisplaySection');
-const hexDataDisplay = document.getElementById('hexData');
-const binaryDataDisplay = document.getElementById('binaryData');
-
-const editModal = document.getElementById('editModal');
-const modalOffset = document.getElementById('modalOffset');
-const modalCurrentValue = document.getElementById('modalCurrentValue');
-const newHexValueInput = document.getElementById('newHexValue');
-const modalError = document.getElementById('modalError');
-const saveEditButton = document.getElementById('saveEdit');
-const cancelEditButton = document.getElementById('cancelEdit');
-
-// Encryption/Decryption elements
-const encryptionSection = document.getElementById('encryptionSection');
+const fileSvg = document.getElementById('fileSvg');
+const hexViewer = document.getElementById('hexViewer');
+const saveHex = document.getElementById('saveHex');
+const metadata = document.getElementById('metadata');
+const binaryOutput = document.getElementById('binaryOutput');
+const error = document.getElementById('error');
+const scrubber = document.getElementById('scrubber');
+const scrubberPos = document.getElementById('scrubberPos');
 const cipherSelect = document.getElementById('cipherSelect');
-const shiftKeyInput = document.getElementById('shiftKeyInput');
-const encryptButton = document.getElementById('encryptButton');
-const decryptButton = document.getElementById('decryptButton');
-const cipherOutput = document.getElementById('cipherOutput');
-const cipherError = document.getElementById('cipherError');
-
-// Graphical View elements
-const graphicalViewSection = document.getElementById('graphicalViewSection');
-const graphicalViewCanvas = document.getElementById('graphicalViewCanvas');
-const ctx = graphicalViewCanvas.getContext('2d');
-const byteInfoDisplay = document.getElementById('byteInfoDisplay');
-
-
-const MAX_FILE_SIZE = 100 * 1024; // 100 KB in bytes
-let currentFileBuffer = null; // Stores the ArrayBuffer of the current file
-let currentViewOffset = 0;
-let currentViewLength = 256; // Default view length
-
-// Define colors for graphical view
-const COLOR_HEADER_METADATA = '#3B82F6'; // Tailwind blue-500
-const COLOR_PAYLOAD_DATA = '#10B981';    // Tailwind emerald-500
-const COLOR_HIGHLIGHT = '#F59E0B';       // Tailwind amber-500 for clicked byte
-const HEADER_METADATA_BYTES = 64; // First 64 bytes for header/metadata
-
-const BYTES_PER_ROW_GRAPHICAL = 64; // Fixed number of bytes to display per row in graphical view
-
-// --- Utility Functions ---
-
-/**
- * Converts an ArrayBuffer to a hexadecimal string representation.
- * @param {ArrayBuffer} buffer The ArrayBuffer to convert.
- * @param {number} [offset=0] The starting offset in the buffer.
- * @param {number} [length=buffer.byteLength] The number of bytes to convert.
- * @returns {string} The hexadecimal string.
- */
-function arrayBufferToHex(buffer, offset = 0, length = buffer.byteLength) {
-    const byteArray = new Uint8Array(buffer, offset, length);
-    return Array.from(byteArray).map(byte => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ');
-}
-
-/**
- * Converts an ArrayBuffer to a binary string representation.
- * @param {ArrayBuffer} buffer The ArrayBuffer to convert.
- * @param {number} [offset=0] The starting offset in the buffer.
- * @param {number} [length=buffer.byteLength] The number of bytes to convert.
- * @returns {string} The binary string.
- */
-function arrayBufferToBinary(buffer, offset = 0, length = buffer.byteLength) {
-    const byteArray = new Uint8Array(buffer, offset, length);
-    return Array.from(byteArray).map(byte => byte.toString(2).padStart(8, '0')).join(' ');
-}
-
-/**
- * Extracts and formats hex data with offsets and character representation.
- * This function is now responsible for generating the HTML for the hex display,
- * including the editable spans.
- * @param {ArrayBuffer} buffer The ArrayBuffer to format.
- * @param {number} offset The starting offset for the view.
- * @param {number} length The number of bytes to view.
- * @returns {string} Formatted hex string with offsets and ASCII.
- */
-function formatHexWithAscii(buffer, offset, length) {
-    const bytes = new Uint8Array(buffer, offset, length);
-    let formattedOutput = '';
-    const bytesPerLine = 16;
-
-    for (let i = 0; i < bytes.length; i += bytesPerLine) {
-        const currentLineBytes = bytes.slice(i, i + bytesPerLine);
-        const currentLineOffset = offset + i;
-
-        // Offset
-        formattedOutput += `<span class="text-gray-500">${currentLineOffset.toString(16).padStart(8, '0').toUpperCase()}: </span>`;
-
-        // Hex values
-        for (let j = 0; j < bytesPerLine; j++) {
-            if (j < currentLineBytes.length) {
-                const byteValue = currentLineBytes[j];
-                const hex = byteValue.toString(16).padStart(2, '0').toUpperCase();
-                // Add data-offset and data-value for editing
-                formattedOutput += `<span class="hex-byte-editable" data-offset="${currentLineOffset + j}" data-value="${hex}">${hex}</span> `;
-            } else {
-                formattedOutput += '   '; // Placeholder for shorter last line
-            }
-        }
-
-        formattedOutput += '  '; // Separator
-
-        // ASCII representation
-        for (let j = 0; j < currentLineBytes.length; j++) {
-            const byteValue = currentLineBytes[j];
-            // Replace non-printable ASCII characters with a dot
-            formattedOutput += (byteValue >= 32 && byteValue <= 126) ? String.fromCharCode(byteValue) : '.';
-        }
-        formattedOutput += '\n';
-    }
-    return formattedOutput;
-}
-
-/**
- * Extracts and formats binary data with offsets.
- * @param {ArrayBuffer} buffer The ArrayBuffer to format.
- * @param {number} offset The starting offset for the view.
- * @param {number} length The number of bytes to view.
- * @returns {string} Formatted binary string with offsets.
- */
-function formatBinary(buffer, offset, length) {
-    const bytes = new Uint8Array(buffer, offset, length);
-    let formattedOutput = '';
-    const bytesPerLine = 8; // Display 8 bytes per line for binary
-
-    for (let i = 0; i < bytes.length; i += bytesPerLine) {
-        const currentLineBytes = bytes.slice(i, i + bytesPerLine);
-        const currentLineOffset = offset + i;
-
-        // Offset
-        formattedOutput += `<span class="text-gray-500">${currentLineOffset.toString(16).padStart(8, '0').toUpperCase()}: </span>`;
-
-        // Binary values
-        for (let j = 0; j < bytesPerLine; j++) {
-            if (j < currentLineBytes.length) {
-                const byteValue = currentLineBytes[j];
-                formattedOutput += byteValue.toString(2).padStart(8, '0') + ' ';
-            } else {
-                formattedOutput += '         '; // Placeholder for shorter last line
-            }
-        }
-        formattedOutput += '\n';
-    }
-    return formattedOutput;
-}
-
-/**
- * Analyzes the file buffer for common header information (magic numbers).
- * @param {ArrayBuffer} buffer The file buffer.
- * @returns {string} A string describing identified headers.
- */
-function analyzeHeaders(buffer) {
-    if (buffer.byteLength === 0) {
-        return "File is empty, no headers to analyze.";
-    }
-
-    const bytes = new Uint8Array(buffer);
-    let headerInfo = '';
-
-    // Helper to get bytes safely
-    const getBytes = (start, count) => {
-        if (bytes.length < start + count) return null;
-        return Array.from(bytes.slice(start, start + count)).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
-    };
-
-    // Common File Signatures (Magic Numbers)
-    // JPEG/JPG: FF D8 FF E0/E1/E2/E3/E8 (SOI marker + APP0/APP1/APP2/APP3/APP8 marker)
-    const jpegSignature1 = getBytes(0, 4); // FF D8 FF E0
-    const jpegSignature2 = getBytes(0, 4); // FF D8 FF E1 (EXIF)
-    const jpegSignature3 = getBytes(0, 4); // FF D8 FF E2 (Canon EOS)
-    const jpegSignature4 = getBytes(0, 4); // FF D8 FF E3 (Samsung D800)
-    const jpegSignature5 = getBytes(0, 4); // FF D8 FF E8 (SPIFF)
-
-    if (jpegSignature1 && jpegSignature1.startsWith('FFD8FF') && ['E0', 'E1', 'E2', 'E3', 'E8'].includes(jpegSignature1.substring(6, 8))) {
-        headerInfo += `- Identified as JPEG/JPG image (Magic Number: ${jpegSignature1}).\n`;
-    }
-
-    // PNG: 89 50 4E 47 0D 0A 1A 0A
-    const pngSignature = getBytes(0, 8);
-    if (pngSignature === '89504E470D0A1A0A') {
-        headerInfo += `- Identified as PNG image (Magic Number: ${pngSignature}).\n`;
-    }
-
-    // GIF: 47 49 46 38 37 61 or 47 49 46 38 39 61
-    const gifSignature = getBytes(0, 6);
-    if (gifSignature === '474946383761' || gifSignature === '474946383961') {
-        headerInfo += `- Identified as GIF image (Magic Number: ${gifSignature}).\n`;
-    }
-
-    // PDF: %PDF-
-    const pdfSignature = new TextDecoder().decode(bytes.slice(0, 5));
-    if (pdfSignature === '%PDF-') {
-        headerInfo += `- Identified as PDF document (Signature: ${pdfSignature}).\n`;
-    }
-
-    // DOCX/XLSX/PPTX (ZIP files): PK 03 04
-    const zipSignature = getBytes(0, 4);
-    if (zipSignature === '504B0304') {
-        headerInfo += `- Identified as a ZIP archive (e.g., DOCX, XLSX, PPTX) (Magic Number: ${zipSignature}).\n`;
-    }
-
-    // MP3 (ID3v2 tag): 49 44 33 (ID3)
-    const mp3ID3Signature = getBytes(0, 3);
-    if (mp3ID3Signature === '494433') {
-        headerInfo += `- Identified as MP3 audio (ID3v2 tag: ${mp3ID3Signature}).\n`;
-    } else {
-        // MP3 (MPEG frame header - common, but less definitive than ID3)
-        // Check for FF FB (MPEG-1 Layer III) or FF F3 (MPEG-2 Layer III)
-        const mp3FrameSignature1 = getBytes(0, 2);
-        if (mp3FrameSignature1 === 'FFFB' || mp3FrameSignature1 === 'FFF3') {
-            headerInfo += `- Identified as MP3 audio (MPEG frame header: ${mp3FrameSignature1}). Note: This is a frame header, not a definitive file signature like ID3.\n`;
-        }
-    }
-
-    // TXT: No specific magic number, but can check for common text encodings or just assume
-    if (headerInfo === '' && buffer.byteLength > 0) {
-        // Heuristic: Check if the first few bytes are printable ASCII
-        const first100Bytes = new TextDecoder('utf-8', { fatal: false }).decode(bytes.slice(0, Math.min(100, bytes.length)));
-        const isMostlyPrintable = [...first100Bytes].every(char => char.charCodeAt(0) >= 32 && char.charCodeAt(0) <= 126 || char === '\n' || char === '\r' || char === '\t');
-        if (isMostlyPrintable) {
-            headerInfo += `- Appears to be a plain text file (TXT). No specific magic number.\n`;
-        }
-    }
-
-    if (headerInfo === '') {
-        headerInfo = "No common file headers identified based on magic numbers.";
-    }
-
-    return headerInfo;
-}
-
-
-/**
- * Renders the file data (hex and binary) based on current view settings.
- */
-function renderFileData() {
-    if (!currentFileBuffer) return;
-
-    const totalBytes = currentFileBuffer.byteLength;
-    const startByte = Math.max(0, Math.min(currentViewOffset, totalBytes - 1));
-    const endByte = Math.min(startByte + currentViewLength, totalBytes);
-    const actualLength = endByte - startByte;
-
-    // Update scrub tool inputs and range display
-    offsetInput.value = startByte;
-    lengthInput.value = actualLength;
-    currentViewRange.textContent = `${startByte} - ${endByte - 1}`;
-
-    // Display Hex Data
-    hexDataDisplay.innerHTML = formatHexWithAscii(currentFileBuffer, startByte, actualLength);
-    // Display Binary Data
-    binaryDataDisplay.textContent = formatBinary(currentFileBuffer, startByte, actualLength);
-
-    // Add click listeners to hex bytes for editing
-    document.querySelectorAll('.hex-byte-editable').forEach(span => {
-        span.onclick = (event) => openEditModal(event.target);
-    });
-}
-
-/**
- * Applies Caesar cipher encryption or decryption to a given text.
- * @param {string} text The input text.
- * @param {number} shift The shift key.
- * @param {boolean} encrypt True for encryption, false for decryption.
- * @returns {string} The processed text.
- */
-function caesarCipher(text, shift, encrypt) {
-    let result = '';
-    shift = shift % 26; // Ensure shift is within 0-25
-    if (!encrypt) {
-        shift = (26 - shift) % 26; // For decryption, shift in reverse
-    }
-
-    for (let i = 0; i < text.length; i++) {
-        let char = text.charCodeAt(i);
-
-        // Uppercase letters (A-Z)
-        if (char >= 65 && char <= 90) {
-            result += String.fromCharCode(((char - 65 + shift) % 26) + 65);
-        }
-        // Lowercase letters (a-z)
-        else if (char >= 97 && char <= 122) {
-            result += String.fromCharCode(((char - 97 + shift) % 26) + 97);
-        }
-        // Other characters (numbers, symbols, spaces) remain unchanged
-        else {
-            result += text.charAt(i);
-        }
-    }
-    return result;
-}
-
-/**
- * Renders the graphical view of the file bytes on the canvas.
- * @param {ArrayBuffer} buffer The file buffer to visualize.
- * @param {number} [highlightByteIndex = -1] Optional index of a byte to highlight.
- */
-function renderGraphicalView(buffer, highlightByteIndex = -1) {
-    if (!buffer || buffer.byteLength === 0) {
-        ctx.clearRect(0, 0, graphicalViewCanvas.width, graphicalViewCanvas.height);
-        byteInfoDisplay.textContent = 'Click a byte in the graphical view to see its details.';
-        return;
-    }
-
-    const bytes = new Uint8Array(buffer);
-    const totalBytes = bytes.byteLength;
-
-    const canvasWidth = graphicalViewCanvas.width; // Fixed width from HTML
-    const pixelWidthPerByte = canvasWidth / BYTES_PER_ROW_GRAPHICAL;
-    const pixelHeightPerByte = pixelWidthPerByte; // Make them square
-
-    const numRows = Math.ceil(totalBytes / BYTES_PER_ROW_GRAPHICAL);
-    const requiredCanvasHeight = numRows * pixelHeightPerByte;
-
-    // Set canvas height dynamically to enable scrolling in its container
-    graphicalViewCanvas.height = requiredCanvasHeight;
-
-    // Clear the canvas
-    ctx.clearRect(0, 0, canvasWidth, requiredCanvasHeight);
-
-    for (let i = 0; i < totalBytes; i++) {
-        const row = Math.floor(i / BYTES_PER_ROW_GRAPHICAL);
-        const col = i % BYTES_PER_ROW_GRAPHICAL;
-
-        const x = col * pixelWidthPerByte;
-        const y = row * pixelHeightPerByte;
-
-        let fillColor;
-        if (i < HEADER_METADATA_BYTES) {
-            fillColor = COLOR_HEADER_METADATA; // Header/Metadata
-        } else {
-            fillColor = COLOR_PAYLOAD_DATA; // Payload Data
-        }
-
-        if (i === highlightByteIndex) {
-            fillColor = COLOR_HIGHLIGHT; // Highlight clicked byte
-        }
-
-        ctx.fillStyle = fillColor;
-        ctx.fillRect(x, y, pixelWidthPerByte, pixelHeightPerByte);
-
-        // Optional: Add a thin border for better separation if pixel size is large enough
-        if (pixelWidthPerByte > 4) { // Only add border if cells are reasonably large
-            ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-            ctx.strokeRect(x, y, pixelWidthPerByte, pixelHeightPerByte);
-        }
-    }
-}
-
-
-// --- Event Handlers ---
-
-fileInput.addEventListener('change', (event) => {
-    const file = event.target.files[0];
-    if (!file) {
-        fileError.textContent = '';
-        fileInfo.classList.add('hidden');
-        metadataSection.classList.add('hidden');
-        graphicalViewSection.classList.add('hidden'); // Hide graphical view
-        scrubToolSection.classList.add('hidden');
-        dataDisplaySection.classList.add('hidden');
-        encryptionSection.classList.add('hidden'); // Hide encryption section
-        currentFileBuffer = null;
-        renderGraphicalView(null); // Clear canvas
-        return;
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-        fileError.textContent = `File size exceeds the 100KB limit. Please select a smaller file. (Current: ${Math.round(file.size / 1024)} KB)`;
-        fileInfo.classList.add('hidden');
-        metadataSection.classList.add('hidden');
-        graphicalViewSection.classList.add('hidden'); // Hide graphical view
-        scrubToolSection.classList.add('hidden');
-        dataDisplaySection.classList.add('hidden');
-        encryptionSection.classList.add('hidden'); // Hide encryption section
-        currentFileBuffer = null;
-        renderGraphicalView(null); // Clear canvas
-        return;
-    }
-
-    fileError.textContent = ''; // Clear previous errors
-
-    // Display basic file info
-    fileName.textContent = file.name;
-    fileSize.textContent = file.size;
-    fileType.textContent = file.type || 'Unknown';
-    fileLastModified.textContent = new Date(file.lastModified).toLocaleString();
-    fileInfo.classList.remove('hidden');
-
-    // Read file as ArrayBuffer
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        currentFileBuffer = e.target.result;
-        currentViewOffset = 0; // Reset view offset
-        currentViewLength = Math.min(256, currentFileBuffer.byteLength); // Default to 256 bytes or less if file is smaller
-
-        // Display metadata (basic file properties)
-        fileMetadata.textContent = `File Name: ${file.name}\nFile Type: ${file.type || 'Unknown'}\nFile Size: ${file.size} bytes\nLast Modified: ${new Date(file.lastModified).toLocaleString()}`;
-        metadataSection.classList.remove('hidden');
-
-        // Analyze and display header info
-        headerDetails.textContent = analyzeHeaders(currentFileBuffer);
-        headerAnalysis.classList.remove('hidden'); // Ensure headerAnalysis is visible
-
-        // Show graphical view
-        graphicalViewSection.classList.remove('hidden');
-        renderGraphicalView(currentFileBuffer); // Render graphical view
-        byteInfoDisplay.textContent = 'Click a byte in the graphical view to see its details.'; // Reset info text
-
-
-        // Show scrub tool, data display, and encryption sections
-        scrubToolSection.classList.remove('hidden');
-        dataDisplaySection.classList.remove('hidden');
-        encryptionSection.classList.remove('hidden'); // Show encryption section
-
-        renderFileData(); // Initial render
-        cipherOutput.value = ''; // Clear cipher output on new file load
-        cipherError.textContent = '';
-    };
-    reader.onerror = () => {
-        fileError.textContent = 'Failed to read file.';
-        currentFileBuffer = null;
-        renderGraphicalView(null); // Clear canvas
-    };
-    reader.readAsArrayBuffer(file);
-});
-
-applyScrub.addEventListener('click', () => {
-    if (!currentFileBuffer) return;
-
-    const newOffset = parseInt(offsetInput.value, 10);
-    const newLength = parseInt(lengthInput.value, 10);
-
-    if (isNaN(newOffset) || newOffset < 0 || newOffset >= currentFileBuffer.byteLength) {
-        // In a real app, you might show a specific error message for invalid offset
-        offsetInput.value = currentViewOffset; // Revert to current valid offset
-        return;
-    }
-    if (isNaN(newLength) || newLength <= 0) {
-         // In a real app, you might show a specific error message for invalid length
-        lengthInput.value = currentViewLength; // Revert to current valid length
-        return;
-    }
-
-    currentViewOffset = newOffset;
-    currentViewLength = newLength;
-    renderFileData();
-});
-
-// --- Modal Logic for Hex Editing ---
-let selectedHexByteSpan = null; // Reference to the span being edited
-let originalByteValue = null; // Store original value for comparison
-
-function openEditModal(spanElement) {
-    selectedHexByteSpan = spanElement;
-    const offset = parseInt(spanElement.dataset.offset, 10);
-    const currentValue = spanElement.dataset.value; // Hex string, e.g., "A5"
-
-    modalOffset.textContent = offset;
-    modalCurrentValue.textContent = currentValue;
-    newHexValueInput.value = currentValue;
-    modalError.textContent = ''; // Clear previous modal errors
-    editModal.classList.remove('hidden');
-    newHexValueInput.focus();
-    newHexValueInput.select(); // Select the text for easy overwrite
-}
-
-function closeEditModal() {
-    editModal.classList.add('hidden');
-    selectedHexByteSpan = null;
-    originalByteValue = null;
-}
-
-saveEditButton.addEventListener('click', () => {
-    const newHex = newHexValueInput.value.trim().toUpperCase();
-    if (!/^[0-9A-F]{2}$/.test(newHex)) {
-        modalError.textContent = 'Please enter a valid 2-digit hex value (00-FF).';
-        return;
-    }
-
-    if (selectedHexByteSpan && currentFileBuffer) {
-        const offset = parseInt(selectedHexByteSpan.dataset.offset, 10);
-        const byteValue = parseInt(newHex, 16); // Convert hex string to integer
-
-        // Create a new ArrayBuffer with the modified byte
-        // It's important to create a new buffer because ArrayBuffer is immutable
-        const newBuffer = currentFileBuffer.slice(0); // Create a copy
-        const newByteArray = new Uint8Array(newBuffer);
-        newByteArray[offset] = byteValue; // Modify the byte in the new array
-
-        currentFileBuffer = newBuffer; // Update the main buffer reference
-
-        renderFileData(); // Re-render with the updated buffer
-        renderGraphicalView(currentFileBuffer); // Re-render graphical view after edit
-    }
-    closeEditModal();
-});
-
-cancelEditButton.addEventListener('click', closeEditModal);
-
-// Allow closing modal with Escape key
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !editModal.classList.contains('hidden')) {
-        closeEditModal();
-    }
-});
-
-// Prevent modal from closing when clicking inside the content
-document.querySelector('.modal-content').addEventListener('click', (event) => {
-    event.stopPropagation();
-});
-
-// Close modal when clicking outside the content
-editModal.addEventListener('click', closeEditModal);
-
-
-// --- Encryption/Decryption Event Listeners ---
-encryptButton.addEventListener('click', () => {
-    if (!currentFileBuffer) {
-        cipherError.textContent = 'Please upload a file first.';
-        return;
-    }
-    const shift = parseInt(shiftKeyInput.value, 10);
-    if (isNaN(shift) || shift < 0 || shift > 25) {
-        cipherError.textContent = 'Shift key must be between 0 and 25.';
-        return;
-    }
-    cipherError.textContent = ''; // Clear previous errors
-
-    // Get the ASCII representation of the *entire* file for encryption
-    // Note: This will only work meaningfully for text-based files.
-    // For binary files, the output will likely be gibberish but demonstrates the character shift.
-    const fileText = new TextDecoder('utf-8', { fatal: false }).decode(currentFileBuffer);
-    const encryptedText = caesarCipher(fileText, shift, true);
-    cipherOutput.value = encryptedText;
-});
-
-decryptButton.addEventListener('click', () => {
-    if (!currentFileBuffer) {
-        cipherError.textContent = 'Please upload a file first.';
-        return;
-    }
-    const shift = parseInt(shiftKeyInput.value, 10);
-    if (isNaN(shift) || shift < 0 || shift > 25) {
-        cipherError.textContent = 'Shift key must be between 0 and 25.';
-        return;
-    }
-    cipherError.textContent = ''; // Clear previous errors
-
-    // Decrypt the content currently in the cipherOutput textarea
-    // This allows decrypting previously encrypted text or any text pasted into the box
-    const textToDecrypt = cipherOutput.value;
-    const decryptedText = caesarCipher(textToDecrypt, shift, false);
-    cipherOutput.value = decryptedText;
-});
-
-// New event listener for graphical view clicks
-graphicalViewCanvas.addEventListener('click', (event) => {
-    if (!currentFileBuffer) return;
-
-    const rect = graphicalViewCanvas.getBoundingClientRect();
-    // Adjust for scroll position of the parent container
-    const scrollY = graphicalViewCanvas.parentElement.scrollTop;
-    const x = event.clientX - rect.left;
-    const y = (event.clientY - rect.top) + scrollY; // Add scrollY to get true Y relative to canvas top
-
-    const canvasWidth = graphicalViewCanvas.width;
-    const pixelWidthPerByte = canvasWidth / BYTES_PER_ROW_GRAPHICAL;
-    const pixelHeightPerByte = pixelWidthPerByte;
-
-    const col = Math.floor(x / pixelWidthPerByte);
-    const row = Math.floor(y / pixelHeightPerByte);
-
-    const clickedByteIndex = row * BYTES_PER_ROW_GRAPHICAL + col;
-
-    if (clickedByteIndex >= 0 && clickedByteIndex < currentFileBuffer.byteLength) {
-        const byteValue = new Uint8Array(currentFileBuffer)[clickedByteIndex];
-        const hex = byteValue.toString(16).padStart(2, '0');
-        const binary = byteValue.toString(2).padStart(8, '0');
-        const ascii = (byteValue >= 32 && byteValue <= 126) ? String.fromCharCode(byteValue) : '.';
-
-        byteInfoDisplay.innerHTML = `
-            <span class="font-semibold">Offset:</span> 0x${clickedByteIndex.toString(16).toUpperCase()} (${clickedByteIndex}) &nbsp;
-            <span class="font-semibold">Hex:</span> 0x${hex.toUpperCase()} &nbsp;
-            <span class="font-semibold">Binary:</span> ${binary} &nbsp;
-            <span class="font-semibold">ASCII:</span> '${ascii}'
-        `;
-        renderGraphicalView(currentFileBuffer, clickedByteIndex); // Re-render to highlight
-    } else {
-        byteInfoDisplay.textContent = 'Click a byte in the graphical view to see its details.';
-        renderGraphicalView(currentFileBuffer); // Clear highlight
-    }
-});
-
-
-// Initial state: hide sections until a file is loaded
-fileInfo.classList.add('hidden');
-metadataSection.classList.add('hidden');
-graphicalViewSection.classList.add('hidden'); // Ensure graphical view section is hidden initially
-scrubToolSection.classList.add('hidden');
-dataDisplaySection.classList.add('hidden');
-encryptionSection.classList.add('hidden'); // Ensure encryption section is hidden initially
-
-// Handle canvas resizing (optional, but good for responsiveness)
-window.addEventListener('resize', () => {
-    if (currentFileBuffer) {
-        // Adjust canvas display size
-        const containerWidth = graphicalViewCanvas.parentElement.clientWidth;
-        graphicalViewCanvas.style.width = containerWidth + 'px';
-        // Re-render to adapt to new dimensions if necessary (though fixed internal resolution is used)
-        renderGraphicalView(currentFileBuffer);
-    }
-});
-
-// Set initial canvas display width to match its parent container
-window.onload = () => {
-    const containerWidth = graphicalViewCanvas.parentElement.clientWidth;
-    graphicalViewCanvas.style.width = containerWidth + 'px';
+const cipherKey = document.getElementById('cipherKey');
+const encryptBtn = document.getElementById('encryptBtn');
+const decryptBtn = document.getElementById('decryptBtn');
+const encryptedOutput = document.getElementById('encryptedOutput');
+const byteTooltip = document.getElementById('byteTooltip');
+const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+const rectSize = 10;
+let fileBuffer = null;
+let sensitiveRanges = [];
+let headerRanges = [];
+
+// Supported file types and their magic numbers
+const fileSignatures = {
+  'txt': { signature: null, metadata: parseTextMetadata, sensitive: parseTextSensitive, headers: parseTextHeaders },
+  'jpg': { signature: [0xFF, 0xD8], metadata: parseImageMetadata, sensitive: parseImageSensitive, headers: parseImageHeaders },
+  'jpeg': { signature: [0xFF, 0xD8], metadata: parseImageMetadata, sensitive: parseImageSensitive, headers: parseImageHeaders },
+  'png': { signature: [0x89, 0x50, 0x4E, 0x47], metadata: parseImageMetadata, sensitive: parseImageSensitive, headers: parseImageHeaders },
+  'docx': { signature: [0x50, 0x4B, 0x03, 0x04], metadata: parseDocxMetadata, sensitive: parseDocxSensitive, headers: parseDocxHeaders },
+  'mp3': { signature: [0x49, 0x44, 0x33], metadata: parseMp3Metadata, sensitive: parseMp3Sensitive, headers: parseMp3Headers },
+  'pdf': { signature: [0x25, 0x50, 0x44, 0x46], metadata: parseGenericMetadata, sensitive: parseGenericSensitive, headers: parsePdfHeaders },
+  'mp4': { signature: [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70], metadata: parseGenericMetadata, sensitive: parseGenericSensitive, headers: parseMp4Headers }
 };
+
+// File input handler
+fileInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  // Validate file size
+  if (file.size > MAX_FILE_SIZE) {
+    showError(`File size exceeds ${MAX_FILE_SIZE / 1024}KB limit.`);
+    return;
+  }
+
+  // Read file as array buffer
+  const arrayBuffer = await file.arrayBuffer();
+  fileBuffer = new Uint8Array(arrayBuffer);
+
+  // Detect file type
+  const ext = file.name.split('.').pop().toLowerCase();
+  const fileType = fileSignatures[ext] ? ext : 'unknown';
+  if (fileType === 'unknown' || !checkFileSignature(fileBuffer, fileSignatures[ext]?.signature)) {
+    showError('Unsupported or invalid file format.');
+    return;
+  }
+
+  // Get sensitive and header ranges
+  sensitiveRanges = await fileSignatures[ext].sensitive(file, fileBuffer);
+  headerRanges = await fileSignatures[ext].headers(file, fileBuffer);
+  // Display graphical view
+  drawFileSvg(fileBuffer, sensitiveRanges, headerRanges);
+  // Display hex data with sensitive highlights
+  displayHex(fileBuffer, sensitiveRanges);
+  // Display metadata
+  const metadataText = await fileSignatures[ext].metadata(file, fileBuffer);
+  metadata.innerHTML = metadataText;
+  // Display binary sample
+  displayBinarySample(fileBuffer);
+  // Initialize scrubber
+  initScrubber(fileBuffer);
+  // Clear encryption output
+  encryptedOutput.value = '';
+  clearError();
+});
+
+// SVG click handler
+fileSvg.addEventListener('click', (e) => {
+  if (e.target.tagName === 'rect') {
+    const byteIndex = parseInt(e.target.getAttribute('data-index'));
+    scrubber.value = byteIndex;
+    scrubberPos.textContent = `Position: ${byteIndex}`;
+    highlightHexPosition(byteIndex);
+    showByteTooltip(e, byteIndex);
+    drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, byteIndex);
+  }
+});
+
+// Save hex changes
+saveHex.addEventListener('click', () => {
+  const hex = hexViewer.textContent.replace(/\s/g, '');
+  if (!/^[0-9A-Fa-f]*$/.test(hex) || hex.length % 2 !== 0) {
+    showError('Invalid hex data.');
+    return;
+  }
+  fileBuffer = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+  drawFileSvg(fileBuffer, sensitiveRanges, headerRanges);
+  displayHex(fileBuffer, sensitiveRanges);
+  clearError();
+});
+
+// Scrubber handler
+scrubber.addEventListener('input', () => {
+  const pos = parseInt(scrubber.value);
+  scrubberPos.textContent = `Position: ${pos}`;
+  highlightHexPosition(pos);
+  drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, pos);
+});
+
+// Encryption handler
+encryptBtn.addEventListener('click', () => {
+  if (!fileBuffer) {
+    showError('No file loaded.');
+    return;
+  }
+  const cipher = cipherSelect.value;
+  const key = cipherKey.value;
+  if (!key) {
+    showError('Encryption key is required.');
+    return;
+  }
+  const encrypted = encryptData(fileBuffer, cipher, key);
+  displayEncryptedHex(encrypted);
+  clearError();
+});
+
+// Decryption handler
+decryptBtn.addEventListener('click', () => {
+  if (!fileBuffer) {
+    showError('No file loaded.');
+    return;
+  }
+  const cipher = cipherSelect.value;
+  const key = cipherKey.value;
+  if (!key) {
+    showError('Decryption key is required.');
+    return;
+  }
+  const decrypted = decryptData(fileBuffer, cipher, key);
+  displayEncryptedHex(decrypted);
+  clearError();
+});
+
+// Draw file on SVG
+function drawFileSvg(buffer, sensitiveRanges, headerRanges, highlightPos = -1) {
+  const bytesPerRow = 16;
+  const width = bytesPerRow * rectSize;
+  const height = Math.ceil(buffer.length / bytesPerRow) * rectSize;
+  fileSvg.setAttribute('width', width);
+  fileSvg.setAttribute('height', height);
+  fileSvg.innerHTML = '';
+
+  for (let i = 0; i < buffer.length; i++) {
+    let color = 'rgb(200, 200, 200)'; // Unknown/Other (Gray)
+    if (headerRanges.some(([start, end]) => i >= start && i <= end)) {
+      color = 'rgb(173, 216, 230)'; // File System/Headers (Blue)
+    } else if (sensitiveRanges.some(([start, end]) => i >= start && i <= end)) {
+      color = 'rgb(255, 255, 224)'; // Metadata (Yellow)
+    } else {
+      color = 'rgb(144, 238, 144)'; // Content (Green)
+    }
+    const x = (i % bytesPerRow) * rectSize;
+    const y = Math.floor(i / bytesPerRow) * rectSize;
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', x);
+    rect.setAttribute('y', y);
+    rect.setAttribute('width', rectSize);
+    rect.setAttribute('height', rectSize);
+    rect.setAttribute('fill', color);
+    rect.setAttribute('data-index', i);
+    if (i === highlightPos) {
+      rect.setAttribute('stroke', 'red');
+      rect.setAttribute('stroke-width', '2');
+    }
+    fileSvg.appendChild(rect);
+  }
+}
+
+// Show byte tooltip
+function showByteTooltip(event, index) {
+  const hex = fileBuffer[index].toString(16).padStart(2, '0').toUpperCase();
+  const binary = fileBuffer[index].toString(2).padStart(8, '0');
+  byteTooltip.innerHTML = `Position: ${index}<br>Hex: ${hex}<br>Binary: ${binary}`;
+  byteTooltip.style.display = 'block';
+  const rect = event.target.getBoundingClientRect();
+  byteTooltip.style.left = `${rect.left + window.scrollX + rectSize}px`;
+  byteTooltip.style.top = `${rect.top + window.scrollY + rectSize}px`;
+  setTimeout(() => {
+    byteTooltip.style.display = 'none';
+  }, 2000); // Hide after 2 seconds
+}
+
+// Display hex data with highlights
+function displayHex(buffer, ranges) {
+  const hex = Array.from(buffer)
+    .map((b, i) => {
+      const hexByte = b.toString(16).padStart(2, '0').toUpperCase();
+      const isSensitive = ranges.some(([start, end]) => i >= start && i <= end);
+      return isSensitive
+        ? `<span class="bg-yellow-200" title="Potentially Sensitive Data">${hexByte}</span>`
+        : hexByte;
+    })
+    .join(' ');
+  hexViewer.innerHTML = hex;
+}
+
+// Highlight hex position
+function highlightHexPosition(pos) {
+  const hex = hexViewer.textContent.split(' ');
+  if (pos < hex.length) {
+    hexViewer.focus();
+    const range = document.createRange();
+    const sel = window.getSelection();
+    const span = hexViewer.childNodes[pos] || hexViewer.childNodes[0];
+    range.selectNodeContents(span);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+}
+
+// Initialize scrubber
+function initScrubber(buffer) {
+  scrubber.max = buffer.length - 1;
+  scrubber.value = 0;
+  scrubberPos.textContent = `Position: 0`;
+}
+
+// Display binary sample
+function displayBinarySample(buffer) {
+  const sample = Array.from(buffer.slice(0, 256))
+    .map(b => b.toString(2).padStart(8, '0'))
+    .join(' ');
+  binaryOutput.textContent = sample || 'No binary data available.';
+}
+
+// Check file signature
+function checkFileSignature(buffer, signature) {
+  if (!signature) return true;
+  return signature.every((byte, i) => buffer[i] === byte);
+}
+
+// Parse text metadata
+function parseTextMetadata(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve(`File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: text/plain<br>Sample Content: ${reader.result.slice(0, 100)}...`);
+    };
+    reader.readAsText(file);
+  });
+}
+
+// Parse text sensitive ranges
+function parseTextSensitive(file) {
+  return Promise.resolve([]); // No specific sensitive ranges
+}
+
+// Parse text headers
+function parseTextHeaders(file) {
+  return Promise.resolve([]); // No headers for text
+}
+
+// Parse image metadata
+function parseImageMetadata(file) {
+  return new Promise((resolve) => {
+    window.EXIF.getData(file, function() {
+      const exifData = window.EXIF.getAllTags(this);
+      const metadata = [`File Name: ⚠️ ${file.name}`, `Size: ${file.size} bytes`, `Type: ${file.type}`];
+      for (let tag in exifData) {
+        const isSensitive = ['GPSLatitude', 'GPSLongitude', 'DateTime', 'Model'].includes(tag);
+        metadata.push(`${isSensitive ? '⚠️ ' : ''}${tag}: ${exifData[tag]}`);
+      }
+      resolve(metadata.join('<br>') || 'No EXIF data available.');
+    });
+  });
+}
+
+// Parse image sensitive ranges
+function parseImageSensitive(file, buffer) {
+  return new Promise((resolve) => {
+    window.EXIF.getData(file, function() {
+      const ranges = [];
+      for (let i = 0; i < buffer.length - 1; i++) {
+        if (buffer[i] === 0xFF && buffer[i + 1] === 0xE1) {
+          ranges.push([i, i + 100]); // Approximate EXIF range
+          break;
+        }
+      }
+      resolve(ranges);
+    });
+  });
+}
+
+// Parse image headers
+function parseImageHeaders(file, buffer) {
+  return Promise.resolve([[0, 8]]); // First 8 bytes for magic numbers
+}
+
+// Parse docx metadata
+async function parseDocxMetadata(file, buffer) {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    const docProps = await zip.file('docProps/core.xml')?.async('string');
+    if (docProps) {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(docProps, 'application/xml');
+      const props = {
+        creator: xml.querySelector('creator')?.textContent,
+        lastModifiedBy: xml.querySelector('lastModifiedBy')?.textContent,
+        created: xml.querySelector('created')?.textContent,
+        modified: xml.querySelector('modified')?.textContent
+      };
+      return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.modified || 'N/A'}`;
+    }
+    return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No detailed metadata available.`;
+  } catch (e) {
+    return `Error parsing docx metadata: ${e.message}`;
+  }
+}
+
+// Parse docx sensitive ranges
+async function parseDocxSensitive(file, buffer) {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    const docProps = await zip.file('docProps/core.xml')?.async('string');
+    if (docProps) {
+      return [[0, 500]]; // First 500 bytes for ZIP headers and metadata
+    }
+    return [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Parse docx headers
+async function parseDocxHeaders(file, buffer) {
+  return [[0, 30]]; // ZIP file header
+}
+
+// Parse mp3 metadata
+function parseMp3Metadata(file, buffer) {
+  const id3 = buffer.slice(0, 128);
+  if (id3[0] === 0x54 && id3[1] === 0x41 && id3[2] === 0x47) {
+    const title = String.fromCharCode(...id3.slice(3, 33)).trim();
+    const artist = String.fromCharCode(...id3.slice(33, 63)).trim();
+    const album = String.fromCharCode(...id3.slice(63, 93)).trim();
+    return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Title: ⚠️ ${title || 'N/A'}<br>Artist: ⚠️ ${artist || 'N/A'}<br>Album: ${album || 'N/A'}`;
+  }
+  return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No ID3v1 metadata found.`;
+}
+
+// Parse mp3 sensitive ranges
+function parseMp3Sensitive(file, buffer) {
+  if (buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
+    return [[0, 128]]; // ID3v1 tag at start
+  }
+  return [];
+}
+
+// Parse mp3 headers
+function parseMp3Headers(file, buffer) {
+  return [[0, 10]]; // ID3 header
+}
+
+// Parse generic metadata
+function parseGenericMetadata(file) {
+  return `File Name: ⚠️ ${file.name}<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No specific metadata parser available.`;
+}
+
+// Parse generic sensitive ranges
+function parseGenericSensitive(file) {
+  return Promise.resolve([]);
+}
+
+// Parse PDF headers
+function parsePdfHeaders(file, buffer) {
+  return [[0, 8]]; // PDF magic number
+}
+
+// Parse MP4 headers
+function parseMp4Headers(file, buffer) {
+  return [[0, 8]]; // MP4 ftyp box
+}
+
+// Encrypt data
+function encryptData(buffer, cipher, key) {
+  if (cipher === 'caesar') {
+    const shift = parseInt(key) || 3;
+    return Array.from(buffer).map(b => (b + shift) % 256);
+  } else if (cipher === 'aes') {
+    const text = String.fromCharCode(...buffer);
+    const encrypted = CryptoJS.AES.encrypt(text, key).toString();
+    return new TextEncoder().encode(encrypted);
+  } else if (cipher === 'xor') {
+    const keyByte = parseInt(key) || 0xFF;
+    return Array.from(buffer).map(b => b ^ keyByte);
+  }
+  return buffer;
+}
+
+// Decrypt data
+function decryptData(buffer, cipher, key) {
+  if (cipher === 'caesar') {
+    const shift = parseInt(key) || 3;
+    return Array.from(buffer).map(b => (b - shift + 256) % 256);
+  } else if (cipher === 'aes') {
+    try {
+      const text = String.fromCharCode(...buffer);
+      const decrypted = CryptoJS.AES.decrypt(text, key).toString(CryptoJS.enc.Utf8);
+      return new TextEncoder().encode(decrypted);
+    } catch (e) {
+      showError('Decryption failed. Invalid key or data.');
+      return buffer;
+    }
+  } else if (cipher === 'xor') {
+    const keyByte = parseInt(key) || 0xFF;
+    return Array.from(buffer).map(b => b ^ keyByte);
+  }
+  return buffer;
+}
+
+// Display encrypted hex
+function displayEncryptedHex(buffer) {
+  const hex = Array.from(buffer)
+    .map(b => b.toString(16).padStart(2, '0').toUpperCase())
+    .join(' ');
+  encryptedOutput.value = hex;
+}
+
+// Show error
+function showError(msg) {
+  error.textContent = msg;
+  error.classList.remove('hidden');
+}
+
+// Clear error
+function clearError() {
+  error.textContent = '';
+  error.classList.add('hidden');
+}
