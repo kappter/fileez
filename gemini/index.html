@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Analyzer for CS Students</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>File Analyzer</h1>
+        <p>A learning tool for Computer Science students to explore file structures.</p>
+    </header>
+
+    <main>
+        <section id="file-upload-section">
+            <h2>1. Upload Your File</h2>
+            <input type="file" id="fileInput" accept="*.*">
+            <p id="file-status"></p>
+        </section>
+
+        <section id="file-info-section" style="display: none;">
+            <h2>2. File Information</h2>
+            <div class="info-group">
+                <h3>Basic File Details</h3>
+                <p><strong>File Name:</strong> <span id="fileName"></span></p>
+                <p><strong>File Size:</strong> <span id="fileSize"></span></p>
+                <p><strong>File Type (MIME):</strong> <span id="fileMimeType"></span></p>
+                <p><strong>Last Modified:</strong> <span id="fileLastModified"></span></p>
+            </div>
+
+            <div class="info-group">
+                <h3>Detected Header Information</h3>
+                <pre id="headerInfo"></pre>
+                <p id="fileTypeDetection"></p>
+            </div>
+
+            <div class="info-group">
+                <h3>Extracted Metadata</h3>
+                <div id="metadataDisplay">
+                    <p><em>(Metadata will appear here after parsing)</em></p>
+                </div>
+            </div>
+        </section>
+
+        <section id="file-content-section" style="display: none;">
+            <h2>3. File Content Explorer</h2>
+            <div class="controls">
+                <label for="offsetRange">Current Offset:</label>
+                <input type="range" id="offsetRange" min="0" value="0" step="1">
+                <span id="currentOffsetValue">0x000000</span>
+            </div>
+
+            <div class="content-display">
+                <div class="hex-column">
+                    <h4>Offset</h4>
+                    <pre id="hexOffsets"></pre>
+                </div>
+                <div class="hex-column">
+                    <h4>Hexadecimal</h4>
+                    <pre id="hexView"></pre>
+                </div>
+                <div class="ascii-column">
+                    <h4>ASCII/Text</h4>
+                    <pre id="asciiView"></pre>
+                </div>
+            </div>
+
+            <div class="binary-sample">
+                <h3>Binary Sample (First Few Bytes)</h3>
+                <pre id="binarySample"></pre>
+            </div>
+
+            <button id="downloadEditedFile" style="display: none;">Download Edited File</button>
+            <p class="warning"><em>Note: On-screen editing is a complex feature and will require advanced JavaScript. For this starter, we focus on viewing.</em></p>
+        </section>
+
+        <section id="encryption-section" style="display: none;">
+            <h2>4. Encryption & Decryption Demo</h2>
+            <p>See how simple encryption algorithms transform your file's content.</p>
+
+            <div class="encryption-controls info-group">
+                <label for="encryptionAlgorithm">Choose Algorithm:</label>
+                <select id="encryptionAlgorithm">
+                    <option value="none">-- Select an Algorithm --</option>
+                    <option value="caesar">Caesar Cipher</option>
+                    <option value="xor">XOR Cipher (with simple key)</option>
+                    </select>
+                <div id="caesarKeyInput" style="display: none; margin-top: 10px;">
+                    <label for="caesarShift">Caesar Shift (0-25):</label>
+                    <input type="number" id="caesarShift" min="0" max="25" value="3">
+                </div>
+                <div id="xorKeyInput" style="display: none; margin-top: 10px;">
+                    <label for="xorKey">XOR Key (single ASCII char):</label>
+                    <input type="text" id="xorKey" maxlength="1" value="K" style="width: 50px;">
+                </div>
+                <button id="applyEncryption">Apply Encryption</button>
+            </div>
+
+            <h3>Original File Content (Text Preview)</h3>
+            <pre id="originalContentPreview" class="encryption-preview"></pre>
+
+            <h3>Encrypted File Content (Text Preview)</h3>
+            <pre id="encryptedContentPreview" class="encryption-preview"></pre>
+
+            <h3>Decrypted File Content (Text Preview)</h3>
+            <pre id="decryptedContentPreview" class="encryption-preview"></pre>
+
+            <p class="info-note"><em>Note: For simplicity, this demo converts the file's binary content to a UTF-8 string for encryption/decryption, and may not handle all binary files perfectly.</em></p>
+        </section>
+
+    </main>
+
+    <footer>
+        <p>&copy; 2025 Your Name/Institution. For educational purposes only.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

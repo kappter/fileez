@@ -1,0 +1,50 @@
+/* ... (existing style.css content) */
+
+#encryption-section {
+    padding-top: 20px;
+    margin-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+.encryption-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.encryption-controls select,
+.encryption-controls input[type="number"],
+.encryption-controls input[type="text"] {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1em;
+}
+
+.encryption-controls button {
+    margin-top: 0; /* Override previous margin */
+    padding: 10px 18px;
+}
+
+.encryption-preview {
+    background-color: #f0f0f0;
+    border: 1px dashed #bbb;
+    padding: 15px;
+    border-radius: 5px;
+    font-family: 'Roboto Mono', 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #444;
+    max-height: 200px; /* Limit height for previews */
+    overflow-y: auto; /* Scroll if content exceeds height */
+    white-space: pre-wrap; /* Wrap long lines */
+    word-break: break-all; /* Break words for long unreadable strings */
+}
+
+.info-note {
+    font-style: italic;
+    color: #666;
+    font-size: 0.9em;
+    margin-top: 15px;
+}
