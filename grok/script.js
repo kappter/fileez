@@ -1,6 +1,7 @@
 const fileInput = document.getElementById('fileInput');
 const fileSvg = document.getElementById('fileSvg');
 const hexViewer = document.getElementById('hexViewer');
+const asciiViewer = document.getElementById('asciiViewer');
 const saveHex = document.getElementById('saveHex');
 const metadata = document.getElementById('metadata');
 const sectionTable = document.getElementById('sectionTable');
@@ -19,12 +20,17 @@ const themeIcon = document.getElementById('themeIcon');
 const sunIcon = document.getElementById('sunIcon');
 const moonIcon = document.getElementById('moonIcon');
 const loadingOverlay = document.getElementById('loadingOverlay');
+const infoModal = document.getElementById('infoModal');
+const modalTitle = document.getElementById('modalTitle');
+const modalContent = document.getElementById('modalContent');
+const closeModal = document.getElementById('closeModal');
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 const rectSize = 10;
 let fileBuffer = null;
 let sensitiveRanges = [];
 let headerRanges = [];
 let sectionRanges = [];
+let fileNameRanges = [];
 
 // Theme toggle
 const applyTheme = (theme) => {
@@ -42,6 +48,17 @@ applyTheme(savedTheme);
 themeToggle.addEventListener('click', () => {
   const currentTheme = document.getElementById('html-root').classList.contains('dark') ? 'dark' : 'light';
   applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+});
+
+// Modal toggle
+function showModal(title, content) {
+  modalTitle.textContent = title;
+  modalContent.innerHTML = content;
+  infoModal.classList.remove('hidden');
+}
+
+closeModal.addEventListener('click', () => {
+  infoModal.classList.add('hidden');
 });
 
 // Supported file types and their magic numbers
@@ -89,11 +106,12 @@ fileInput.addEventListener('change', async (e) => {
     sensitiveRanges = await fileSignatures[ext].sensitive(file, fileBuffer);
     headerRanges = await fileSignatures[ext].headers(file, fileBuffer);
     sectionRanges = await generateSectionRanges(file, fileBuffer, ext);
+    fileNameRanges = sectionRanges.filter(r => r.name === 'File Name' && r.range).map(r => r.range);
 
     // Display graphical view
-    drawFileSvg(fileBuffer, sensitiveRanges, headerRanges);
-    // Display hex data with sensitive highlights
-    displayHex(fileBuffer, sensitiveRanges);
+    drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, fileNameRanges);
+    // Display hex and ASCII data with sensitive and file name highlights
+    displayHex(fileBuffer, sensitiveRanges, fileNameRanges);
     // Display metadata
     const metadataText = await fileSignatures[ext].metadata(file, fileBuffer);
     metadata.innerHTML = metadataText;
@@ -122,7 +140,7 @@ fileSvg.addEventListener('click', (e) => {
     scrubberPos.textContent = `Position: ${byteIndex}`;
     highlightHexPosition(byteIndex);
     showByteTooltip(e, byteIndex);
-    drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, byteIndex);
+    drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, fileNameRanges, byteIndex);
   }
 });
 
@@ -132,6 +150,13 @@ sectionTable.addEventListener('click', (e) => {
     const start = parseInt(e.target.getAttribute('data-start'));
     const end = parseInt(e.target.getAttribute('data-end'));
     highlightHexRange(start, end);
+  } else if (e.target.classList.contains('learn-more')) {
+    const type = e.target.getAttribute('data-type');
+    const ext = sectionTable.getAttribute('data-ext') || 'generic';
+    showModal(
+      `Where is the ${type} Stored?`,
+      type === 'File Name' ? getFileNameExplanation(ext) : getExtensionExplanation(ext)
+    );
   }
 });
 
@@ -143,8 +168,8 @@ saveHex.addEventListener('click', () => {
     return;
   }
   fileBuffer = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-  drawFileSvg(fileBuffer, sensitiveRanges, headerRanges);
-  displayHex(fileBuffer, sensitiveRanges);
+  drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, fileNameRanges);
+  displayHex(fileBuffer, sensitiveRanges, fileNameRanges);
   clearError();
 });
 
@@ -153,7 +178,7 @@ scrubber.addEventListener('input', () => {
   const pos = parseInt(scrubber.value);
   scrubberPos.textContent = `Position: ${pos}`;
   highlightHexPosition(pos);
-  drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, pos);
+  drawFileSvg(fileBuffer, sensitiveRanges, headerRanges, fileNameRanges, pos);
 });
 
 // Encryption handler
@@ -190,8 +215,30 @@ decryptBtn.addEventListener('click', () => {
   clearError();
 });
 
+// Modal content for file name
+function getFileNameExplanation(ext) {
+  const baseText = `The file name is typically stored in the <strong>file system</strong> (e.g., NTFS, FAT32) by the operating system, not in the file's binary content. The File Analysis Tool retrieves it via the browser's File API.`;
+  const specific = {
+    'mp3': `For MP3 files, the file name or song title may be stored in the <strong>ID3v1 tag</strong> (bytes 3-32) or ID3v2 tags within the file's binary content. Check the Hex Viewer (orange highlight) and ASCII column to see it.`,
+    'docx': `For DOCX files, the file name or document title may be in <strong>docProps/core.xml</strong> (bytes 0-500) within the ZIP structure. Look for the orange highlight in the Hex Viewer and ASCII column.`,
+    'generic': `For most files (e.g., TXT, JPG, PNG, PDF, MP4), the file name is only in the file system, not the binary. No orange highlight appears in the Hex Viewer for these files.`
+  };
+  return `${baseText}<br><br>${specific[ext] || specific['generic']}`;
+}
+
+// Modal content for extension
+function getExtensionExplanation(ext) {
+  const baseText = `The file extension (e.g., .txt, .mp3) is part of the file name stored in the <strong>file system</strong> by the operating system. The File Analysis Tool retrieves it via the File API. The extension is rarely stored in the file's binary content, but the file type is identified by <strong>magic numbers</strong> in the header.`;
+  const specific = {
+    'mp3': `For MP3 files, the file type is identified by the magic number <strong>49 44 33</strong> (ID3) in bytes 0-2, visible in the Hex Viewer (blue highlight).`,
+    'docx': `For DOCX files, the file type is identified by the ZIP magic number <strong>50 4B 03 04</strong> in bytes 0-3, visible in the Hex Viewer (blue highlight).`,
+    'generic': `For most files, the file type is identified by magic numbers in the header (blue highlight in Hex Viewer). For example, TXT has no magic number, JPG uses FF D8, PNG uses 89 50 4E 47.`
+  };
+  return `${baseText}<br><br>${specific[ext] || specific['generic']}`;
+}
+
 // Draw file on SVG
-function drawFileSvg(buffer, sensitiveRanges, headerRanges, highlightPos = -1) {
+function drawFileSvg(buffer, sensitiveRanges, fileNameRanges, headerRanges, highlightPos = -1) {
   const bytesPerRow = 16;
   const width = bytesPerRow * rectSize;
   const height = Math.ceil(buffer.length / bytesPerRow) * rectSize;
@@ -201,8 +248,10 @@ function drawFileSvg(buffer, sensitiveRanges, headerRanges, highlightPos = -1) {
 
   for (let i = 0; i < buffer.length; i++) {
     let color = 'rgb(200, 200, 200)'; // Unknown/Other (Gray)
-    if (headerRanges.some(([start, end]) => i >= start && i <= end)) {
-      color = 'rgb(173, 216, 230)'; // File System/Headers (Blue)
+    if (fileNameRanges.some(([start, end]) => i >= start && i <= end)) {
+      color = 'rgb(255, 165, 0)'; // File Name (Orange)
+    } else if (headerRanges.some(([start, end]) => i >= start && i <= end)) {
+      color = 'rgb(173, 216, 230)'; // Headers (Blue)
     } else if (sensitiveRanges.some(([start, end]) => i >= start && i <= end)) {
       color = 'rgb(255, 255, 224)'; // Metadata (Yellow)
     } else {
@@ -229,64 +278,94 @@ function drawFileSvg(buffer, sensitiveRanges, headerRanges, highlightPos = -1) {
 function showByteTooltip(event, index) {
   const hex = fileBuffer[index].toString(16).padStart(2, '0').toUpperCase();
   const binary = fileBuffer[index].toString(2).padStart(8, '0');
-  byteTooltip.innerHTML = `Position: ${index}<br>Hex: ${hex}<br>Binary: ${binary}`;
+  const ascii = (fileBuffer[index] >= 32 && fileBuffer[index] <= 126) ? String.fromCharCode(fileBuffer[index]) : '.';
+  const isFileName = fileNameRanges.some(([start, end]) => index >= start && index <= end);
+  const tooltipText = isFileName ? `Part of File Name (e.g., MP3 title, DOCX metadata)` : '';
+  byteTooltip.innerHTML = `Position: ${index}<br>Hex: ${hex}<br>Binary: ${binary}<br>ASCII: ${ascii}${tooltipText ? '<br>' + tooltipText : ''}`;
   byteTooltip.style.display = 'block';
   const rect = event.target.getBoundingClientRect();
   byteTooltip.style.left = `${rect.left + window.scrollX + rectSize}px`;
   byteTooltip.style.top = `${rect.top + window.scrollY + rectSize}px`;
   setTimeout(() => {
     byteTooltip.style.display = 'none';
-  }, 2000); // Hide after 2 seconds
+  }, 2000);
 }
 
-// Display hex data with highlights
-function displayHex(buffer, ranges) {
-  const hex = Array.from(buffer)
-    .map((b, i) => {
-      const hexByte = b.toString(16).padStart(2, '0').toUpperCase();
-      const isSensitive = ranges.some(([start, end]) => i >= start && i <= end);
-      return isSensitive
-        ? `<span class="bg-yellow-200 dark:bg-yellow-600" title="Potentially Sensitive Data">${hexByte}</span>`
-        : `<span>${hexByte}</span>`;
-    })
-    .join(' ');
-  hexViewer.innerHTML = hex;
+// Display hex and ASCII data with sensitive and file name highlights
+function displayHex(buffer, sensitiveRanges, fileNameRanges) {
+  const bytesPerRow = 16;
+  let hexLines = [];
+  let asciiLines = [];
+
+  for (let i = 0; i < buffer.length; i += bytesPerRow) {
+    const rowBytes = buffer.slice(i, i + bytesPerRow);
+    const hexRow = Array.from(rowBytes)
+      .map((b, j) => {
+        const hexByte = b.toString(16).padStart(2, '0').toUpperCase();
+        const isFileName = fileNameRanges.some(([start, end]) => i + j >= start && i + j <= end);
+        const isSensitive = sensitiveRanges.some(([start, end]) => i + j >= start && i + j <= end);
+        const className = isFileName ? 'bg-orange-400 dark:bg-orange-600' : isSensitive ? 'bg-yellow-200 dark:bg-yellow-600' : '';
+        const title = isFileName ? 'File Name (e.g., MP3 title, DOCX metadata)' : isSensitive ? 'Potentially Sensitive Data' : '';
+        return `<span class="${className}" title="${title}" data-index="${i + j}">${hexByte}</span>`;
+      })
+      .join(' ');
+    const asciiRow = Array.from(rowBytes)
+      .map((b, j) => {
+        const char = (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.';
+        const isFileName = fileNameRanges.some(([start, end]) => i + j >= start && i + j <= end);
+        const isSensitive = sensitiveRanges.some(([start, end]) => i + j >= start && i + j <= end);
+        const className = isFileName ? 'bg-orange-400 dark:bg-orange-600' : isSensitive ? 'bg-yellow-200 dark:bg-yellow-600' : '';
+        return `<span class="${className}" data-index="${i + j}">${char}</span>`;
+      })
+      .join('');
+    hexLines.push(hexRow);
+    asciiLines.push(asciiRow);
+  }
+
+  hexViewer.innerHTML = hexLines.join('<br>');
+  asciiViewer.innerHTML = asciiLines.join('<br>');
 }
 
-// Highlight single hex position
+// Highlight single hex and ASCII position
 function highlightHexPosition(pos) {
-  const spans = hexViewer.querySelectorAll('span');
-  if (pos < spans.length) {
-    const span = spans[pos];
+  const hexSpans = hexViewer.querySelectorAll('span');
+  const asciiSpans = asciiViewer.querySelectorAll('span');
+  if (pos < hexSpans.length) {
+    const hexSpan = hexSpans[pos];
+    const asciiSpan = asciiSpans[pos];
     const range = document.createRange();
-    range.selectNodeContents(span);
+    range.selectNodeContents(hexSpan);
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
-    span.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    hexSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    asciiSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 }
 
-// Highlight hex range
+// Highlight hex and ASCII range
 function highlightHexRange(start, end) {
-  const spans = hexViewer.querySelectorAll('span');
-  if (start < spans.length && end < spans.length && start <= end) {
+  const hexSpans = hexViewer.querySelectorAll('span');
+  const asciiSpans = asciiViewer.querySelectorAll('span');
+  if (start < hexSpans.length && end < hexSpans.length && start <= end) {
     const range = document.createRange();
-    range.setStartBefore(spans[start]);
-    range.setEndAfter(spans[end]);
+    range.setStartBefore(hexSpans[start]);
+    range.setEndAfter(hexSpans[end]);
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
-    spans[start].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    hexSpans[start].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    asciiSpans[start].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 }
 
-// Generate section table
+// Generate section table with Learn More buttons
 function generateSectionTable(ranges, ext) {
   sectionTable.innerHTML = '';
+  sectionTable.setAttribute('data-ext', ext);
   const sections = [
-    { name: 'File Name', range: ranges.find(r => r.name === 'File Name')?.range || null, color: 'bg-yellow-200 dark:bg-yellow-600' },
-    { name: 'Extension', range: ranges.find(r => r.name === 'Extension')?.range || null, color: 'bg-yellow-200 dark:bg-yellow-600' },
+    { name: 'File Name', range: ranges.find(r => r.name === 'File Name')?.range || null, color: 'bg-orange-400 dark:bg-orange-600' },
+    { name: 'Extension', range: ranges.find(r => r.name === 'Extension')?.range || null, color: 'bg-orange-400 dark:bg-orange-600' },
     { name: 'Encoding', range: ranges.find(r => r.name === 'Encoding')?.range || null, color: 'bg-yellow-200 dark:bg-yellow-600' },
     { name: 'Created Date/Time', range: null, color: 'bg-yellow-200 dark:bg-yellow-600' },
     { name: 'Last Modified Date/Time', range: null, color: 'bg-yellow-200 dark:bg-yellow-600' },
@@ -306,7 +385,7 @@ function generateSectionTable(ranges, ext) {
     tdLabel.className = 'border p-2 border-gray-300 dark:border-gray-600';
     tdLabel.textContent = section.name;
     const tdRect = document.createElement('td');
-    tdRect.className = 'border p-2 border-gray-300 dark:border-gray-600';
+    tdRect.className = 'border p-2 border-gray-300 dark:border-gray-600 flex items-center gap-2';
     if (section.range) {
       const rect = document.createElement('div');
       rect.className = `section-rect ${section.color} w-4 h-4 cursor-pointer`;
@@ -315,6 +394,13 @@ function generateSectionTable(ranges, ext) {
       tdRect.appendChild(rect);
     } else {
       tdRect.textContent = 'N/A';
+    }
+    if (section.name === 'File Name' || section.name === 'Extension') {
+      const learnMore = document.createElement('button');
+      learnMore.className = 'learn-more text-blue-500 hover:underline text-sm';
+      learnMore.setAttribute('data-type', section.name);
+      learnMore.textContent = 'Learn More';
+      tdRect.appendChild(learnMore);
     }
     tr.appendChild(tdLabel);
     tr.appendChild(tdRect);
@@ -330,35 +416,25 @@ async function generateSectionRanges(file, buffer, ext) {
   const name = file.name.split('.').slice(0, -1).join('.');
   const extension = file.name.split('.').pop().toLowerCase();
   
-  // File Name and Extension (from File API, not binary for most formats)
   ranges.push({ name: 'File Name', range: null });
   ranges.push({ name: 'Extension', range: null });
-  
-  // Encoding range (set for specific formats below)
   ranges.push({ name: 'Encoding', range: null });
-  
-  // Headers (from existing headerRanges)
   if (headerRanges.length > 0) {
     ranges.push({ name: 'Headers', range: headerRanges[0] });
   }
-  
-  // Content (approximate as non-header, non-metadata)
   const contentStart = headerRanges.length > 0 ? headerRanges[0][1] + 1 : 0;
   ranges.push({ name: 'Content', range: [contentStart, buffer.length - 1] });
   
-  // MP3: File name in ID3 tags, encoding in frame headers
   if (ext === 'mp3' && buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
-    ranges.find(r => r.name === 'File Name').range = [3, 32]; // Title field in ID3v1
-    ranges.find(r => r.name === 'Encoding').range = [128, 131]; // First frame header
+    ranges.find(r => r.name === 'File Name').range = [3, 32];
+    ranges.find(r => r.name === 'Encoding').range = [128, 131];
   }
-  
-  // DOCX: File name and encoding in docProps/core.xml
   if (ext === 'docx') {
     try {
       const zip = await JSZip.loadAsync(buffer);
       if (zip.file('docProps/core.xml')) {
-        ranges.find(r => r.name === 'File Name').range = [0, 500]; // Approximate ZIP metadata
-        ranges.find(r => r.name === 'Encoding').range = [0, 500]; // XML encoding
+        ranges.find(r => r.name === 'File Name').range = [0, 500];
+        ranges.find(r => r.name === 'Encoding').range = [0, 500];
       }
     } catch (e) {}
   }
@@ -413,7 +489,7 @@ function parseTextMetadata(file, buffer) {
       const name = file.name.split('.').slice(0, -1).join('.');
       const ext = file.name.split('.').pop().toLowerCase();
       const encoding = detectTextEncoding(buffer);
-      resolve(`File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: text/plain<br>Sample Content: ${reader.result.slice(0, 100)}...<br>Note: File name and extension are managed by the file system, not stored in the binary.`);
+      resolve(`File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: text/plain<br>Sample Content: ${reader.result.slice(0, 100)}...<br>Note: File name and extension are stored in the file system by the operating system, not in the file's binary content.`);
     };
     reader.readAsText(file);
   });
@@ -421,12 +497,12 @@ function parseTextMetadata(file, buffer) {
 
 // Parse text sensitive ranges
 function parseTextSensitive(file) {
-  return Promise.resolve([]); // No specific sensitive ranges
+  return Promise.resolve([]);
 }
 
 // Parse text headers
 function parseTextHeaders(file) {
-  return Promise.resolve([]); // No headers for text
+  return Promise.resolve([]);
 }
 
 // Parse image metadata
@@ -448,7 +524,7 @@ function parseImageMetadata(file, buffer) {
         `Deleted: N/A (not applicable for uploaded files)`,
         `Size: ${file.size} bytes`,
         `Type: ${file.type}`,
-        `Note: File name and extension are managed by the file system, not stored in the binary.`
+        `Note: File name and extension are stored in the file system, not in the file's binary content.`
       ];
       for (let tag in exifData) {
         const isSensitive = ['GPSLatitude', 'GPSLongitude', 'DateTime', 'Model'].includes(tag);
@@ -466,7 +542,7 @@ function parseImageSensitive(file, buffer) {
       const ranges = [];
       for (let i = 0; i < buffer.length - 1; i++) {
         if (buffer[i] === 0xFF && buffer[i + 1] === 0xE1) {
-          ranges.push([i, i + 100]); // Approximate EXIF range
+          ranges.push([i, i + 100]);
           break;
         }
       }
@@ -477,7 +553,7 @@ function parseImageSensitive(file, buffer) {
 
 // Parse image headers
 function parseImageHeaders(file, buffer) {
-  return Promise.resolve([[0, 8]]); // First 8 bytes for magic numbers
+  return Promise.resolve([[0, 8]]);
 }
 
 // Parse docx metadata
@@ -496,9 +572,9 @@ async function parseDocxMetadata(file, buffer) {
         created: xml.querySelector('created')?.textContent,
         modified: xml.querySelector('modified')?.textContent
       };
-      return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: UTF-8 (XML)<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.modified || 'N/A'}<br>Note: File name and encoding may be stored in docProps/core.xml (bytes 0-500).`;
+      return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: UTF-8 (XML)<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.modified || 'N/A'}<br>Note: File name may be stored in docProps/core.xml (bytes 0-500, highlighted in orange in Hex Viewer).`;
     }
-    return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: N/A<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No detailed metadata available.<br>Note: File name and extension are managed by the file system.`;
+    return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: N/A<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No detailed metadata available.<br>Note: File name and extension are stored in the file system.`;
   } catch (e) {
     return `Error parsing docx metadata: ${e.message}`;
   }
@@ -510,7 +586,7 @@ async function parseDocxSensitive(file, buffer) {
     const zip = await JSZip.loadAsync(buffer);
     const docProps = await zip.file('docProps/core.xml')?.async('string');
     if (docProps) {
-      return [[0, 500]]; // First 500 bytes for ZIP headers and metadata
+      return [[0, 500]];
     }
     return [];
   } catch (e) {
@@ -520,7 +596,7 @@ async function parseDocxSensitive(file, buffer) {
 
 // Parse docx headers
 async function parseDocxHeaders(file, buffer) {
-  return [[0, 30]]; // ZIP file header
+  return [[0, 30]];
 }
 
 // Parse mp3 metadata
@@ -536,80 +612,84 @@ function parseMp3Metadata(file, buffer) {
     const title = String.fromCharCode(...id3.slice(3, 33)).trim();
     const artist = String.fromCharCode(...id3.slice(33, 63)).trim();
     const album = String.fromCharCode(...id3.slice(63, 93)).trim();
-    return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Title: ⚠️ ${title || 'N/A'} (bytes 3-32)<br>Artist: ⚠️ ${artist || 'N/A'}<br>Album: ${album || 'N/A'}<br>Note: File name may be stored in ID3v1 title (bytes 3-32); encoding in frame headers (bytes 128-131).`;
+    return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Title: ⚠️ ${title || 'N/A'} (bytes 3-32, highlighted in orange in Hex Viewer)<br>Artist: ⚠️ ${artist || 'N/A'}<br>Album: ${album || 'N/A'}<br>Note: File name may be stored in ID3v1 title (bytes 3-32, highlighted in orange in Hex Viewer); encoding in frame headers (bytes 128-131).`;
   }
-  return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No ID3v1 metadata found.<br>Note: File name and extension are managed by the file system.`;
+  return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No ID3v1 metadata found.<br>Note: File name and extension are stored in the file system.`;
 }
 
 // Parse mp3 sensitive ranges
 function parseMp3Sensitive(file, buffer) {
   if (buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
-    return [[0, 128], [128, 131]]; // ID3v1 tag and first frame header
+    return [[0, 128], [128, 131]];
   }
   return [];
 }
 
 // Parse mp3 headers
 function parseMp3Headers(file, buffer) {
-  return [[0, 10]]; // ID3 header
+  return [[0, 10]];
 }
 
 // Parse generic metadata
-function parseGenericMetadata(file) {
+function parseGenericMetadata(file, buffer) {
   const name = file.name.split('.').slice(0, -1).join('.');
   const ext = file.name.split('.').pop().toLowerCase();
-  const encoding = ext === 'pdf' ? 'ASCII/UTF-8' : ext === 'mp4' ? 'H.264/AAC' : 'N/A';
-  return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: ${encoding}<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No specific metadata parser available.<br>Note: File name and extension are managed by the file system.`;
+  return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: N/A<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Note: File name and extension are stored in the file system, not in the file's binary content.`;
 }
 
 // Parse generic sensitive ranges
-function parseGenericSensitive(file) {
+function parseGenericSensitive(file, buffer) {
   return Promise.resolve([]);
 }
 
-// Parse PDF headers
+// Parse pdf headers
 function parsePdfHeaders(file, buffer) {
-  return [[0, 8]]; // PDF magic number
+  return [[0, 8]];
 }
 
-// Parse MP4 headers
+// Parse mp4 headers
 function parseMp4Headers(file, buffer) {
-  return [[0, 8]]; // MP4 ftyp box
+  return [[0, 32]];
 }
 
 // Encrypt data
 function encryptData(buffer, cipher, key) {
+  // Simplified encryption for demo
   if (cipher === 'caesar') {
-    const shift = parseInt(key) || 3;
+    const shift = parseInt(key) || 1;
     return Array.from(buffer).map(b => (b + shift) % 256);
   } else if (cipher === 'aes') {
-    const text = String.fromCharCode(...buffer);
-    const encrypted = CryptoJS.AES.encrypt(text, key).toString();
+    const encrypted = CryptoJS.AES.encrypt(
+      String.fromCharCode(...buffer),
+      key
+    ).toString();
     return new TextEncoder().encode(encrypted);
   } else if (cipher === 'xor') {
-    const keyByte = parseInt(key) || 0xFF;
-    return Array.from(buffer).map(b => b ^ keyByte);
+    const keyBytes = new TextEncoder().encode(key);
+    return Array.from(buffer).map((b, i) => b ^ keyBytes[i % keyBytes.length]);
   }
   return buffer;
 }
 
 // Decrypt data
 function decryptData(buffer, cipher, key) {
+  // Simplified decryption for demo
   if (cipher === 'caesar') {
-    const shift = parseInt(key) || 3;
+    const shift = parseInt(key) || 1;
     return Array.from(buffer).map(b => (b - shift + 256) % 256);
   } else if (cipher === 'aes') {
     try {
-      const text = String.fromCharCode(...buffer);
-      const decrypted = CryptoJS.AES.decrypt(text, key).toString(CryptoJS.enc.Utf8);
+      const decrypted = CryptoJS.AES.decrypt(
+        String.fromCharCode(...buffer),
+        key
+      ).toString(CryptoJS.enc.Utf8);
       return new TextEncoder().encode(decrypted);
     } catch (e) {
-      showError('Decryption failed. Invalid key or data.');
       return buffer;
     }
   } else if (cipher === 'xor') {
-    const keyByte = parseInt(key) || 0xFF;
-    return Array.from(buffer).map(b => b ^ keyByte);
+    const keyBytes = new TextEncoder().encode(key);
+    return Array.from(buffer).map((b, i) => b ^ keyBytes[i % keyBytes.length]);
   }
   return buffer;
 }
@@ -623,8 +703,8 @@ function displayEncryptedHex(buffer) {
 }
 
 // Show error
-function showError(msg) {
-  error.textContent = msg;
+function showError(message) {
+  error.textContent = message;
   error.classList.remove('hidden');
 }
 
