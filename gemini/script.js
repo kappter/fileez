@@ -47,6 +47,13 @@ const encodingSelect = document.getElementById('encodingSelect');
 // Theme toggle button
 const themeToggle = document.getElementById('themeToggle');
 
+// Loading indicator element
+const loadingIndicator = document.getElementById('loadingIndicator');
+
+// Filename Explanation Section (NEW)
+const filenameExplanationSection = document.getElementById('filenameExplanationSection');
+const currentFileNameInExplanation = document.getElementById('currentFileNameInExplanation');
+
 
 const MAX_FILE_SIZE = 100 * 1024; // 100 KB in bytes
 let currentFileBuffer = null; // Stores the ArrayBuffer of the current file
@@ -436,6 +443,7 @@ fileInput.addEventListener('change', (event) => {
         dataDisplaySection.classList.add('hidden');
         encryptionSection.classList.add('hidden'); // Hide encryption section
         loadingIndicator.classList.add('hidden'); // Hide loading indicator if no file selected
+        filenameExplanationSection.classList.add('hidden'); // Hide explanation
         currentFileBuffer = null;
         renderGraphicalView(null); // Clear canvas
         return;
@@ -453,6 +461,7 @@ fileInput.addEventListener('change', (event) => {
         dataDisplaySection.classList.add('hidden');
         encryptionSection.classList.add('hidden'); // Hide encryption section
         loadingIndicator.classList.add('hidden'); // Hide loading indicator on error
+        filenameExplanationSection.classList.add('hidden'); // Hide explanation
         currentFileBuffer = null;
         renderGraphicalView(null); // Clear canvas
         return;
@@ -498,6 +507,10 @@ fileInput.addEventListener('change', (event) => {
         dataDisplaySection.classList.remove('hidden'); // Show hex/binary display
         encryptionSection.classList.remove('hidden'); // Show encryption section
 
+        // Show and update filename explanation section
+        currentFileNameInExplanation.textContent = file.name;
+        filenameExplanationSection.classList.remove('hidden');
+
         renderFileData(); // Initial render
         cipherOutput.value = ''; // Clear cipher output on new file load
         cipherError.textContent = '';
@@ -509,6 +522,7 @@ fileInput.addEventListener('change', (event) => {
         currentFileBuffer = null;
         renderGraphicalView(null); // Clear canvas
         loadingIndicator.classList.add('hidden'); // Hide loading indicator on error
+        filenameExplanationSection.classList.add('hidden'); // Hide explanation on error
     };
     reader.readAsArrayBuffer(file);
 });
@@ -727,6 +741,7 @@ scrubToolSection.classList.add('hidden');
 dataDisplaySection.classList.add('hidden');
 encryptionSection.classList.add('hidden'); // Ensure encryption section is hidden initially
 loadingIndicator.classList.add('hidden'); // Ensure loading indicator is hidden initially
+filenameExplanationSection.classList.add('hidden'); // Ensure new section is hidden initially
 
 // Handle canvas resizing (optional, but good for responsiveness)
 window.addEventListener('resize', () => {
