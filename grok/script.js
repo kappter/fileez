@@ -18,6 +18,7 @@ const themeToggle = document.getElementById('themeToggle');
 const themeIcon = document.getElementById('themeIcon');
 const sunIcon = document.getElementById('sunIcon');
 const moonIcon = document.getElementById('moonIcon');
+const loadingOverlay = document.getElementById('loadingOverlay');
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 const rectSize = 10;
 let fileBuffer = null;
@@ -60,44 +61,57 @@ fileInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
+  // Show loading overlay
+  loadingOverlay.classList.remove('hidden');
+
   // Validate file size
   if (file.size > MAX_FILE_SIZE) {
     showError(`File size exceeds ${MAX_FILE_SIZE / 1024}KB limit.`);
+    loadingOverlay.classList.add('hidden');
     return;
   }
 
-  // Read file as array buffer
-  const arrayBuffer = await file.arrayBuffer();
-  fileBuffer = new Uint8Array(arrayBuffer);
+  try {
+    // Read file as array buffer
+    const arrayBuffer = await file.arrayBuffer();
+    fileBuffer = new Uint8Array(arrayBuffer);
 
-  // Detect file type
-  const ext = file.name.split('.').pop().toLowerCase();
-  const fileType = fileSignatures[ext] ? ext : 'unknown';
-  if (fileType === 'unknown' || !checkFileSignature(fileBuffer, fileSignatures[ext]?.signature)) {
-    showError('Unsupported or invalid file format.');
-    return;
+    // Detect file type
+    const ext = file.name.split('.').pop().toLowerCase();
+    const fileType = fileSignatures[ext] ? ext : 'unknown';
+    if (fileType === 'unknown' || !checkFileSignature(fileBuffer, fileSignatures[ext]?.signature)) {
+      showError('Unsupported or invalid file format.');
+      loadingOverlay.classList.add('hidden');
+      return;
+    }
+
+    // Get sensitive, header, and section ranges
+    sensitiveRanges = await fileSignatures[ext].sensitive(file, fileBuffer);
+    headerRanges = await fileSignatures[ext].headers(file, fileBuffer);
+    sectionRanges = await generateSectionRanges(file, fileBuffer, ext);
+
+    // Display graphical view
+    drawFileSvg(fileBuffer, sensitiveRanges, headerRanges);
+    // Display hex data with sensitive highlights
+    displayHex(fileBuffer, sensitiveRanges);
+    // Display metadata
+    const metadataText = await fileSignatures[ext].metadata(file, fileBuffer);
+    metadata.innerHTML = metadataText;
+    // Generate section table
+    generateSectionTable(sectionRanges, ext);
+    // Display binary sample
+    displayBinarySample(fileBuffer);
+    // Initialize scrubber
+    initScrubber(fileBuffer);
+    // Clear encryption output
+    encryptedOutput.value = '';
+    clearError();
+  } catch (err) {
+    showError(`Error processing file: ${err.message}`);
+  } finally {
+    // Hide loading overlay
+    loadingOverlay.classList.add('hidden');
   }
-
-  // Get sensitive, header, and section ranges
-  sensitiveRanges = await fileSignatures[ext].sensitive(file, fileBuffer);
-  headerRanges = await fileSignatures[ext].headers(file, fileBuffer);
-  sectionRanges = await generateSectionRanges(file, fileBuffer, ext);
-  // Display graphical view
-  drawFileSvg(fileBuffer, sensitiveRanges, headerRanges);
-  // Display hex data with sensitive highlights
-  displayHex(fileBuffer, sensitiveRanges);
-  // Display metadata
-  const metadataText = await fileSignatures[ext].metadata(file, fileBuffer);
-  metadata.innerHTML = metadataText;
-  // Generate section table
-  generateSectionTable(sectionRanges, ext);
-  // Display binary sample
-  displayBinarySample(fileBuffer);
-  // Initialize scrubber
-  initScrubber(fileBuffer);
-  // Clear encryption output
-  encryptedOutput.value = '';
-  clearError();
 });
 
 // SVG click handler

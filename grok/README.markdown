@@ -2,17 +2,23 @@
 
 ## Overview
 
-The File Analysis Tool is a web-based educational app for computer science students to explore file structures and cryptography. Built with HTML, JavaScript, and CSS, it visualizes file bytes, highlights sensitive data, extracts metadata, and supports encryption/decryption. The UI features a modular grid layout with a fixed footer, a dark/light mode toggle, and a sticky hex viewer for easy access without scrolling. A section table highlights key file sections (e.g., file name, extension, encoding, created date/time) in the hex viewer, ideal for learning file formats, binary/hex representation, and data security.
+The File Analysis Tool is a web-based educational app for computer science students to explore file structures and cryptography. Built with HTML, JavaScript, and CSS, it visualizes file bytes, highlights sensitive data, extracts metadata, and supports encryption/decryption. The UI features a modular grid layout with a fixed footer, a dark/light mode toggle (applied to the entire page), a sticky hex viewer for easy access without scrolling, and a loading overlay to indicate file processing. A section table highlights key file sections (e.g., file name, extension, encoding, created date/time) in the hex viewer, ideal for learning file formats, binary/hex representation, and data security.
 
 ## Features
 
 - **Modular Layout**:
   - Two-column grid (responsive, stacks on mobile): left (file input, graphical view, metadata, section table), right (hex viewer, scrubber, encryption, binary sample).
   - Each section is a styled card with rounded corners and shadows for clarity.
+- **Loading Indicator**:
+  - Full-screen overlay with a spinner and “Loading file...” text appears during file processing (e.g., reading, metadata parsing, rendering).
+  - Themed for dark/light mode; disappears when processing completes.
 - **Scrollable Graphical View**:
   - Displays file bytes as 10x10px rectangles in a 16-column SVG grid, scrollable for large files.
   - Colors: yellow (metadata, sensitive), blue (headers), green (content), gray (unknown/other).
-  - Click a rectangle to show a tooltip (position, hex, binary, hides after 2 seconds), update the scrubber, and highlight the corresponding hex byte.
+  - Click a rectangle to:
+    - View a tooltip (position, hex, binary, hides after 2 seconds).
+    - Set the scrubber to the byte’s position.
+    - Highlight only that byte’s hex value in the hex viewer.
 - **Sticky Hex Viewer**:
   - Displays file bytes in hexadecimal, with sensitive data in yellow.
   - Editable; click "Save Hex Changes" to apply modifications (invalid hex shows an error).
@@ -25,7 +31,7 @@ The File Analysis Tool is a web-based educational app for computer science stude
   - Notes storage (file system or binary, e.g., MP3 ID3 tags, DOCX `core.xml`).
 - **Section Table**:
   - Summarizes sections: File Name, Extension, Encoding, Created Date/Time, Last Modified Date/Time, Hidden, Locked, Deleted, Headers, Content.
-  - Clickable 16x16px rectangles (yellow for metadata, blue for headers, green for content) highlight hex ranges (e.g., MP3 title bytes 3-32).
+  - Clickable 16x16px rectangles (yellow for metadata, blue for headers, green for content) highlight hex ranges (e.g., MP3 title bytes 3-32, encoding bytes 128-131).
   - File system metadata (e.g., encoding for text, hidden) shows “N/A” for binary ranges.
 - **Binary Sample**:
   - Shows first 256 bytes in binary format.
@@ -35,7 +41,7 @@ The File Analysis Tool is a web-based educational app for computer science stude
   - Supports Caesar Cipher, AES-256, XOR Cipher for encrypting/decrypting file content.
   - Outputs hex in a textarea.
 - **Dark/Light Mode Toggle**:
-  - Toggle button (sun/moon icons) in header switches themes, stored in `localStorage`.
+  - Toggle button (sun/moon icons) in header switches themes for the entire page (header, main, footer, cards, SVG, tables, inputs), stored in `localStorage`.
   - Light mode: gray background, white cards; dark mode: dark gray background, darker cards.
 - **Fixed Footer**:
   - Displays copyright info (“© 2025 File Analysis Tool. For educational use only.”) at the bottom of the viewport.
@@ -81,6 +87,16 @@ The File Analysis Tool is a web-based educational app for computer science stude
        --yellow-sensitive: #fefcbf;
        --blue-header: #bfdbfe;
        --green-content: #bbf7d0;
+       --svg-rect-gray: #c8c8c8;
+       --tooltip-bg: #1f2937;
+       --tooltip-text: #ffffff;
+       --input-bg: #ffffff;
+       --button-bg-blue: #3b82f6;
+       --button-bg-green: #22c55e;
+       --button-bg-red: #ef4444;
+       --button-text: #ffffff;
+       --loading-bg: #6b7280;
+       --loading-text: #ffffff;
      }
 
      .dark {
@@ -92,6 +108,16 @@ The File Analysis Tool is a web-based educational app for computer science stude
        --yellow-sensitive: #facc15;
        --blue-header: #2563eb;
        --green-content: #22c55e;
+       --svg-rect-gray: #6b7280;
+       --tooltip-bg: #374151;
+       --tooltip-text: #f3f4f6;
+       --input-bg: #374151;
+       --button-bg-blue: #60a5fa;
+       --button-bg-green: #4ade80;
+       --button-bg-red: #f87171;
+       --button-text: #f3f4f6;
+       --loading-bg: #1f2937;
+       --loading-text: #f3f4f6;
      }
 
      body {
@@ -101,11 +127,12 @@ The File Analysis Tool is a web-based educational app for computer science stude
 
      .card {
        background-color: var(--bg-card);
-       border-color: var(--border-primary);
+       border: 1px solid var(--border-primary);
      }
 
      #hexViewer {
        background-color: var(--hex-bg);
+       color: var(--text-primary);
      }
 
      .section-rect {
@@ -129,6 +156,69 @@ The File Analysis Tool is a web-based educational app for computer science stude
      footer {
        background-color: var(--bg-card);
        color: var(--text-primary);
+     }
+
+     #byteTooltip {
+       background-color: var(--tooltip-bg);
+       color: var(--tooltip-text);
+     }
+
+     input[type="file"],
+     input[type="range"],
+     select,
+     textarea {
+       background-color: var(--input-bg);
+       color: var(--text-primary);
+       border: 1px solid var(--border-primary);
+     }
+
+     #saveHex {
+       background-color: var(--button-bg-blue);
+       color: var(--button-text);
+     }
+
+     #encryptBtn {
+       background-color: var(--button-bg-green);
+       color: var(--button-text);
+     }
+
+     #decryptBtn {
+       background-color: var(--button-bg-red);
+       color: var(--button-text);
+     }
+
+     #fileSvg rect[fill="rgb(200, 200, 200)"] {
+       fill: var(--svg-rect-gray);
+     }
+
+     #sectionTable {
+       border: 1px solid var(--border-primary);
+     }
+
+     #sectionTable td {
+       border: 1px solid var(--border-primary);
+     }
+
+     #themeToggle:hover {
+       background-color: var(--border-primary);
+     }
+
+     #loadingOverlay {
+       background-color: var(--loading-bg);
+     }
+
+     #loadingOverlay p {
+       color: var(--loading-text);
+     }
+
+     @keyframes spin {
+       to {
+         transform: rotate(360deg);
+       }
+     }
+
+     .animate-spin {
+       animation: spin 1s linear infinite;
      }
      ```
    - Build `styles.css`: `npx tailwindcss -i ./input.css -o ./styles.css --minify`.
@@ -156,9 +246,10 @@ The File Analysis Tool is a web-based educational app for computer science stude
 ## Usage
 
 1. **Toggle Theme**:
-   - Click the sun/moon icon in the header to switch between light and dark modes (persists across sessions).
+   - Click the sun/moon icon in the header to switch between light and dark modes (applies to entire page, persists across sessions).
 2. **Upload a File**:
    - Select a file (.txt, .jpg, .jpeg, .png, .docx, .mp3, .pdf, .mp4, up to 1MB).
+   - A loading overlay with a spinner and “Loading file...” appears during processing.
    - Errors show for unsupported formats or oversized files.
 3. **Explore the Graphical View**:
    - See bytes as a scrollable SVG grid (16 columns, 10x10px rectangles).
@@ -188,6 +279,14 @@ The File Analysis Tool is a web-based educational app for computer science stude
 
 ## Troubleshooting
 
+- **Loading Overlay Issues**:
+  - **Overlay Persists**: Ensure `script.js` hides the overlay in the `finally` block of the `fileInput` event listener.
+  - **Overlay Not Showing**: Verify `<div id="loadingOverlay">` exists in `index.html` and `loadingOverlay.classList.remove('hidden')` is called.
+  - **Theming Issues**: Check `styles.css` for `--loading-bg` and `--loading-text` variables in light/dark modes.
+- **Dark/Light Mode Not Applying to All Elements**:
+  - Ensure `localStorage` is enabled in your browser.
+  - Verify `<html class="light" id="html-root">` in `index.html` and toggle button functionality.
+  - Check `styles.css` for correct `dark:` classes and CSS variables.
 - **404 Errors for `styles.css` or `script.js`**:
   - **Local Testing**: Ensure `styles.css` and `script.js` are in the same directory as `index.html`. Use relative paths (`./styles.css`, `./script.js`) in `index.html`.
   - **GitHub Pages**: Verify files are committed to the repository root or subdirectory (e.g., `docs/`). Update `index.html` paths to match (e.g., `/file-analysis-tool/styles.css` or `/file-analysis-tool/docs/styles.css`). Check GitHub Pages settings (`main` branch, correct folder).
@@ -205,7 +304,6 @@ The File Analysis Tool is a web-based educational app for computer science stude
 - **Section Table**: “N/A” indicates metadata (e.g., encoding for text, hidden, locked) stored in the file system, not the binary.
 - **File Size Errors**: Keep files under 1MB.
 - **Browser Issues**: Use Chrome, Firefox, or Edge; older browsers may not support SVG/JavaScript.
-- **Theme Issues**: Ensure `localStorage` is enabled; toggle sun/moon icon to switch modes.
 
 ## Notes for Students
 
@@ -224,6 +322,7 @@ The File Analysis Tool is a web-based educational app for computer science stude
   - Change tooltip duration in `showByteTooltip` (`setTimeout`).
   - Modify table rectangle size in `styles.css` (`.section-rect`).
   - Customize theme colors in `styles.css` (CSS custom properties).
+  - Adjust loading spinner size or text in `styles.css` (`#loadingOverlay`).
 
 ## License
 
