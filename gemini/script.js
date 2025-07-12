@@ -25,6 +25,7 @@ const newHexValueInput = document.getElementById('newHexValue');
 const modalError = document.getElementById('modalError');
 const saveEditButton = document.getElementById('saveEdit');
 const cancelEditButton = document.getElementById('cancelEdit');
+const editSuccessMessage = document.getElementById('editSuccessMessage'); // NEW: Success message element
 
 // Encryption/Decryption elements
 const encryptionSection = document.getElementById('encryptionSection');
@@ -50,9 +51,17 @@ const themeToggle = document.getElementById('themeToggle');
 // Loading indicator element
 const loadingIndicator = document.getElementById('loadingIndicator');
 
-// Filename Explanation Section (NEW)
+// Filename Explanation Section
 const filenameExplanationSection = document.getElementById('filenameExplanationSection');
 const currentFileNameInExplanation = document.getElementById('currentFileNameInExplanation');
+
+// Data Type Breakdown Section (NEW)
+const dataTypeBreakdownSection = document.getElementById('dataTypeBreakdownSection');
+const byteTypePieChart = document.getElementById('byteTypePieChart');
+const pieChartLegend = document.getElementById('pieChartLegend');
+
+// About This Tool Section (NEW)
+const aboutToolSection = document.getElementById('aboutToolSection');
 
 
 const MAX_FILE_SIZE = 100 * 1024; // 100 KB in bytes
@@ -68,6 +77,15 @@ const COLOR_HIGHLIGHT = '#F59E0B';       // Tailwind amber-500 for clicked byte
 const HEADER_METADATA_BYTES = 64; // First 64 bytes for header/metadata
 
 const BYTES_PER_ROW_GRAPHICAL = 64; // Fixed number of bytes to display per row in graphical view
+
+// Pie chart colors (mapped to CSS variables for theme compatibility)
+const PIE_CHART_COLORS = {
+    'Control Characters (0x00-0x1F, 0x7F)': 'var(--chart-color-control)',
+    'Printable ASCII (0x20-0x7E)': 'var(--chart-color-printable)',
+    'Extended ASCII / Latin-1 (0x80-0xFF)': 'var(--chart-color-extended)',
+    'Other/Invalid': 'var(--chart-color-other)'
+};
+
 
 // --- Theme Toggle Logic ---
 /**
@@ -89,6 +107,10 @@ function toggleTheme() {
     document.documentElement.classList.toggle('dark');
     const newTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
     localStorage.setItem('theme', newTheme);
+    // Re-render pie chart on theme change to update colors
+    if (currentFileBuffer) {
+        renderPieChart(analyzeByteTypes(currentFileBuffer));
+    }
 }
 
 // Apply theme on initial load
@@ -170,39 +192,6 @@ function formatHexWithAscii(buffer, offset, length, highlightOffset = -1) {
             const charCode = char.charCodeAt(0);
             return (charCode >= 32 && charCode <= 126) ? char : '.'; // Replace non-printable with dot
         }).join('');
-        formattedOutput += '\n';
-    }
-    return formattedOutput;
-}
-
-/**
- * Extracts and formats binary data with offsets.
- * @param {ArrayBuffer} buffer The ArrayBuffer to format.
- * @param {number} offset The starting offset for the view.
- * @param {number} length The number of bytes to view.
- * @returns {string} Formatted binary string with offsets.
- */
-function formatBinary(buffer, offset, length) {
-    const bytes = new Uint8Array(buffer, offset, length);
-    let formattedOutput = '';
-    const bytesPerLine = 8; // Display 8 bytes per line for binary
-
-    for (let i = 0; i < bytes.length; i += bytesPerLine) {
-        const currentLineBytes = bytes.slice(i, i + bytesPerLine);
-        const currentLineOffset = offset + i;
-
-        // Offset
-        formattedOutput += `<span class="text-secondary-text">${currentLineOffset.toString(16).padStart(8, '0').toUpperCase()}: </span>`;
-
-        // Binary values
-        for (let j = 0; j < bytesPerLine; j++) {
-            if (j < currentLineBytes.length) {
-                const byteValue = currentLineBytes[j];
-                formattedOutput += byteValue.toString(2).padStart(8, '0') + ' ';
-            } else {
-                formattedOutput += '         '; // Placeholder for shorter last line
-            }
-        }
         formattedOutput += '\n';
     }
     return formattedOutput;
@@ -429,6 +418,124 @@ function renderGraphicalView(buffer, highlightByteIndex = -1) {
     }
 }
 
+/**
+ * Analyzes byte types in the buffer and returns counts.
+ * @param {ArrayBuffer} buffer
+ * @returns {Array<Object>} Data for the pie chart.
+ */
+function analyzeByteTypes(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let counts = {
+        'Control Characters (0x00-0x1F, 0x7F)': 0,
+        'Printable ASCII (0x20-0x7E)': 0,
+        'Extended ASCII / Latin-1 (0x80-0xFF)': 0,
+        'Other/Invalid': 0 // Fallback for any unexpected
+    };
+
+    for (let i = 0; i < bytes.length; i++) {
+        const byte = bytes[i];
+        if (byte >= 0x00 && byte <= 0x1F || byte === 0x7F) {
+            counts['Control Characters (0x00-0x1F, 0x7F)']++;
+        } else if (byte >= 0x20 && byte <= 0x7E) {
+            counts['Printable ASCII (0x20-0x7E)']++;
+        } else if (byte >= 0x80 && byte <= 0xFF) {
+            counts['Extended ASCII / Latin-1 (0x80-0xFF)']++;
+        } else {
+            counts['Other/Invalid']++;
+        }
+    }
+
+    // Convert counts to an array of objects suitable for D3 pie chart
+    return Object.keys(counts).map(key => ({
+        label: key,
+        value: counts[key],
+        color: PIE_CHART_COLORS[key] || 'gray' // Fallback color
+    })).filter(d => d.value > 0); // Only include categories with data
+}
+
+/**
+ * Renders the pie chart using D3.js.
+ * @param {Array<Object>} data Data for the pie chart.
+ */
+function renderPieChart(data) {
+    // Clear previous chart
+    d3.select(byteTypePieChart).selectAll("*").remove();
+    pieChartLegend.innerHTML = ''; // Clear previous legend
+
+    if (data.length === 0) {
+        pieChartLegend.textContent = "No data to display for byte type breakdown.";
+        return;
+    }
+
+    const width = byteTypePieChart.clientWidth;
+    const height = byteTypePieChart.clientHeight;
+    const radius = Math.min(width, height) / 2 - 10; // Subtract some padding
+
+    const svg = d3.select(byteTypePieChart)
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", `translate(${width / 2}, ${height / 2})`);
+
+    const pie = d3.pie()
+        .sort(null)
+        .value(d => d.value);
+
+    const arc = d3.arc()
+        .innerRadius(0)
+        .outerRadius(radius);
+
+    const outerArc = d3.arc()
+        .innerRadius(radius * 0.9)
+        .outerRadius(radius * 0.9);
+
+    const arcs = svg.selectAll(".arc")
+        .data(pie(data))
+        .enter()
+        .append("g")
+        .attr("class", "arc");
+
+    arcs.append("path")
+        .attr("d", arc)
+        .attr("fill", d => d.data.color)
+        .attr("stroke", "var(--color-primary-bg)") // Border between slices
+        .style("stroke-width", "1px")
+        .transition() // Add transition for smooth drawing
+        .duration(750)
+        .attrTween("d", function(d) {
+            const i = d3.interpolate(d.startAngle, d.endAngle);
+            return function(t) {
+                d.endAngle = i(t);
+                return arc(d);
+            };
+        });
+
+    // Add text labels
+    arcs.append("text")
+        .attr("transform", d => `translate(${arc.centroid(d)})`)
+        .attr("text-anchor", "middle")
+        .attr("fill", "white") // Text color for labels on slices
+        .style("font-size", "10px")
+        .style("font-weight", "bold")
+        .text(d => d.data.value > 0 ? `${((d.data.value / d3.sum(data, v => v.value)) * 100).toFixed(1)}%` : "")
+        .style("opacity", 0) // Start hidden
+        .transition() // Fade in
+        .duration(1000)
+        .style("opacity", 1);
+
+
+    // Create legend
+    data.forEach(d => {
+        const legendItem = document.createElement('div');
+        legendItem.className = 'flex items-center gap-2';
+        legendItem.innerHTML = `
+            <span class="inline-block w-4 h-4 rounded-sm" style="background-color: ${d.color};"></span>
+            <span>${d.label} (${d.value} bytes)</span>
+        `;
+        pieChartLegend.appendChild(legendItem);
+    });
+}
+
 
 // --- Event Handlers ---
 
@@ -444,6 +551,8 @@ fileInput.addEventListener('change', (event) => {
         encryptionSection.classList.add('hidden'); // Hide encryption section
         loadingIndicator.classList.add('hidden'); // Hide loading indicator if no file selected
         filenameExplanationSection.classList.add('hidden'); // Hide explanation
+        dataTypeBreakdownSection.classList.add('hidden'); // Hide pie chart section
+        aboutToolSection.classList.add('hidden'); // Hide about tool section
         currentFileBuffer = null;
         renderGraphicalView(null); // Clear canvas
         return;
@@ -462,6 +571,8 @@ fileInput.addEventListener('change', (event) => {
         encryptionSection.classList.add('hidden'); // Hide encryption section
         loadingIndicator.classList.add('hidden'); // Hide loading indicator on error
         filenameExplanationSection.classList.add('hidden'); // Hide explanation
+        dataTypeBreakdownSection.classList.add('hidden'); // Hide pie chart section
+        aboutToolSection.classList.add('hidden'); // Hide about tool section
         currentFileBuffer = null;
         renderGraphicalView(null); // Clear canvas
         return;
@@ -511,6 +622,13 @@ fileInput.addEventListener('change', (event) => {
         currentFileNameInExplanation.textContent = file.name;
         filenameExplanationSection.classList.remove('hidden');
 
+        // Show and render data type breakdown pie chart
+        dataTypeBreakdownSection.classList.remove('hidden');
+        renderPieChart(analyzeByteTypes(currentFileBuffer));
+
+        // Show About This Tool section
+        aboutToolSection.classList.remove('hidden');
+
         renderFileData(); // Initial render
         cipherOutput.value = ''; // Clear cipher output on new file load
         cipherError.textContent = '';
@@ -523,6 +641,8 @@ fileInput.addEventListener('change', (event) => {
         renderGraphicalView(null); // Clear canvas
         loadingIndicator.classList.add('hidden'); // Hide loading indicator on error
         filenameExplanationSection.classList.add('hidden'); // Hide explanation on error
+        dataTypeBreakdownSection.classList.add('hidden'); // Hide pie chart section on error
+        aboutToolSection.classList.add('hidden'); // Hide about tool section on error
     };
     reader.readAsArrayBuffer(file);
 });
@@ -592,6 +712,7 @@ function openEditModal(spanElement) {
     modalCurrentValue.textContent = currentValue;
     newHexValueInput.value = currentValue;
     modalError.textContent = ''; // Clear previous modal errors
+    editSuccessMessage.classList.add('hidden'); // Hide previous success message
     editModal.classList.remove('hidden');
     newHexValueInput.focus();
     newHexValueInput.select(); // Select the text for easy overwrite
@@ -601,6 +722,7 @@ function closeEditModal() {
     editModal.classList.add('hidden');
     selectedHexByteSpan = null;
     originalByteValue = null;
+    editSuccessMessage.classList.add('hidden'); // Ensure hidden on close
 }
 
 saveEditButton.addEventListener('click', () => {
@@ -624,8 +746,17 @@ saveEditButton.addEventListener('click', () => {
 
         renderFileData(); // Re-render with the updated buffer
         renderGraphicalView(currentFileBuffer); // Re-render graphical view after edit
+        renderPieChart(analyzeByteTypes(currentFileBuffer)); // Re-render pie chart after edit
+
+        // Show success message
+        editSuccessMessage.classList.remove('hidden');
+        setTimeout(() => {
+            editSuccessMessage.classList.add('hidden');
+            closeEditModal(); // Close modal after showing message briefly
+        }, 1000); // Show for 1 second
+    } else {
+        closeEditModal(); // Close if something went wrong
     }
-    closeEditModal();
 });
 
 cancelEditButton.addEventListener('click', closeEditModal);
@@ -742,6 +873,9 @@ dataDisplaySection.classList.add('hidden');
 encryptionSection.classList.add('hidden'); // Ensure encryption section is hidden initially
 loadingIndicator.classList.add('hidden'); // Ensure loading indicator is hidden initially
 filenameExplanationSection.classList.add('hidden'); // Ensure new section is hidden initially
+dataTypeBreakdownSection.classList.add('hidden'); // Ensure new section is hidden initially
+aboutToolSection.classList.add('hidden'); // Ensure new section is hidden initially
+
 
 // Handle canvas resizing (optional, but good for responsiveness)
 window.addEventListener('resize', () => {
@@ -751,6 +885,8 @@ window.addEventListener('resize', () => {
         graphicalViewCanvas.style.width = containerWidth + 'px';
         // Re-render to adapt to new dimensions if necessary (though fixed internal resolution is used)
         renderGraphicalView(currentFileBuffer);
+        // Re-render pie chart on resize to adapt to new container width/height
+        renderPieChart(analyzeByteTypes(currentFileBuffer));
     }
 });
 
