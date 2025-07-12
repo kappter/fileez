@@ -22,6 +22,12 @@
     --color-input-text: #334155; /* Dark text for inputs */
     --color-footer-bg: #1e293b; /* Dark slate for footer */
     --color-footer-text: #f8fafc; /* Light text for footer */
+
+    /* Pie Chart Colors - Light Theme */
+    --chart-color-control: #60A5FA; /* Blue-400 */
+    --chart-color-printable: #34D399; /* Emerald-400 */
+    --chart-color-extended: #FACC15; /* Yellow-400 */
+    --chart-color-other: #F87171;    /* Red-400 */
 }
 
 html.dark {
@@ -47,6 +53,12 @@ html.dark {
     --color-input-text: #e2e8f0; /* Light text for inputs */
     --color-footer-bg: #0f172a; /* Even darker slate for footer */
     --color-footer-text: #cbd5e1; /* Slightly darker light text for footer */
+
+    /* Pie Chart Colors - Dark Theme */
+    --chart-color-control: #3B82F6; /* Blue-500 */
+    --chart-color-printable: #10B981; /* Emerald-500 */
+    --chart-color-extended: #F59E0B; /* Amber-500 */
+    --chart-color-other: #EF4444;    /* Red-500 */
 }
 
 /* Apply custom properties */
@@ -58,6 +70,8 @@ body {
 }
 
 /* General component styling using variables */
+.bg-background { background-color: var(--color-background); }
+.text-text { color: var(--color-text); }
 .bg-primary-bg { background-color: var(--color-primary-bg); }
 .text-primary-text { color: var(--color-primary-text); }
 .bg-secondary-bg { background-color: var(--color-secondary-bg); }
@@ -202,4 +216,14 @@ input[type="range"]::-ms-thumb {
 .bg-input-bg::placeholder {
     color: var(--color-secondary-text);
     opacity: 0.7; /* Optional: make it slightly transparent */
+}
+
+/* Diagnostic/Fallback for buttons - these should now be redundant if classes are applied correctly */
+button.bg-accent-color {
+    background-color: var(--color-accent-color); /* Removed !important, should work with cascade */
+    color: white;
+}
+button.bg-secondary-bg {
+    background-color: var(--color-secondary-bg);
+    color: var(--color-secondary-text);
 }
