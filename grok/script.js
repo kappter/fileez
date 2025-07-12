@@ -3,6 +3,8 @@ const fileSvg = document.getElementById('fileSvg');
 const hexViewer = document.getElementById('hexViewer');
 const asciiViewer = document.getElementById('asciiViewer');
 const saveHex = document.getElementById('saveHex');
+const downloadFile = document.getElementById('downloadFile');
+const saveMessage = document.getElementById('saveMessage');
 const metadata = document.getElementById('metadata');
 const sectionTable = document.getElementById('sectionTable');
 const binaryOutput = document.getElementById('binaryOutput');
@@ -24,6 +26,7 @@ const infoModal = document.getElementById('infoModal');
 const modalTitle = document.getElementById('modalTitle');
 const modalContent = document.getElementById('modalContent');
 const closeModal = document.getElementById('closeModal');
+const dataPieChart = document.getElementById('dataPieChart').getContext('2d');
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 const rectSize = 10;
 let fileBuffer = null;
@@ -31,6 +34,8 @@ let sensitiveRanges = [];
 let headerRanges = [];
 let sectionRanges = [];
 let fileNameRanges = [];
+let currentFileName = '';
+let pieChartInstance = null;
 
 // Theme toggle
 const applyTheme = (theme) => {
@@ -38,6 +43,7 @@ const applyTheme = (theme) => {
   sunIcon.classList.toggle('hidden', theme === 'dark');
   moonIcon.classList.toggle('hidden', theme !== 'dark');
   localStorage.setItem('theme', theme);
+  updatePieChart(); // Update chart colors for theme
 };
 
 // Initialize theme
@@ -57,6 +63,11 @@ hexViewer.addEventListener('scroll', () => {
 
 asciiViewer.addEventListener('scroll', () => {
   hexViewer.scrollTop = asciiViewer.scrollTop; // Sync vertical scroll
+});
+
+// Update ASCII viewer when hex changes
+hexViewer.addEventListener('input', () => {
+  updateAsciiViewer();
 });
 
 // Modal toggle
@@ -101,6 +112,7 @@ fileInput.addEventListener('change', async (e) => {
     // Read file as array buffer
     const arrayBuffer = await file.arrayBuffer();
     fileBuffer = new Uint8Array(arrayBuffer);
+    currentFileName = file.name;
 
     // Detect file type
     const ext = file.name.split('.').pop().toLowerCase();
@@ -130,8 +142,12 @@ fileInput.addEventListener('change', async (e) => {
     displayBinarySample(fileBuffer);
     // Initialize scrubber
     initScrubber(fileBuffer);
+    // Display pie chart
+    updatePieChart();
     // Clear encryption output
     encryptedOutput.value = '';
+    // Show download button
+    downloadFile.classList.remove('hidden');
     clearError();
   } catch (err) {
     showError(`Error processing file: ${err.message}`);
@@ -171,7 +187,7 @@ sectionTable.addEventListener('click', (e) => {
 
 // Save hex changes
 saveHex.addEventListener('click', () => {
-  const hex = hexViewer.textContent.replace(/\s/g, '');
+  const hex = hexViewer.value.replace(/\s+/g, '');
   if (!/^[0-9A-Fa-f]*$/.test(hex) || hex.length % 2 !== 0) {
     showError('Invalid hex data.');
     return;
@@ -179,7 +195,24 @@ saveHex.addEventListener('click', () => {
   fileBuffer = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
   drawFileSvg(fileBuffer, sensitiveRanges, fileNameRanges, headerRanges);
   displayHex(fileBuffer, sensitiveRanges, fileNameRanges);
+  saveMessage.classList.remove('hidden');
+  setTimeout(() => saveMessage.classList.add('hidden'), 2000);
   clearError();
+});
+
+// Download modified file
+downloadFile.addEventListener('click', () => {
+  if (!fileBuffer) {
+    showError('No file loaded.');
+    return;
+  }
+  const blob = new Blob([fileBuffer], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `modified_${currentFileName}`;
+  a.click();
+  URL.revokeObjectURL(url);
 });
 
 // Scrubber handler
@@ -288,7 +321,7 @@ function showByteTooltip(event, index) {
   const hex = fileBuffer[index].toString(16).padStart(2, '0').toUpperCase();
   const binary = fileBuffer[index].toString(2).padStart(8, '0');
   const ascii = (fileBuffer[index] >= 32 && fileBuffer[index] <= 126) ? String.fromCharCode(fileBuffer[index]) : '.';
-  const isFileName = fileNameRanges.some(([start, end]) => index >= start && index <= end);
+  const isFileName = fileNameRanges.some(([start, end]) => index >= start && i <= end);
   const tooltipText = isFileName ? `Part of File Name (e.g., MP3 title, DOCX metadata)` : '';
   byteTooltip.innerHTML = `Position: ${index}<br>Hex: ${hex}<br>Binary: ${binary}<br>ASCII: ${ascii}${tooltipText ? '<br>' + tooltipText : ''}`;
   byteTooltip.style.display = 'block';
@@ -309,14 +342,7 @@ function displayHex(buffer, sensitiveRanges, fileNameRanges) {
   for (let i = 0; i < buffer.length; i += bytesPerRow) {
     const rowBytes = buffer.slice(i, i + bytesPerRow);
     const hexRow = Array.from(rowBytes)
-      .map((b, j) => {
-        const hexByte = b.toString(16).padStart(2, '0').toUpperCase();
-        const isFileName = fileNameRanges.some(([start, end]) => i + j >= start && i + j <= end);
-        const isSensitive = sensitiveRanges.some(([start, end]) => i + j >= start && i + j <= end);
-        const className = isFileName ? 'bg-orange-400 dark:bg-orange-600' : isSensitive ? 'bg-yellow-200 dark:bg-yellow-600' : '';
-        const title = isFileName ? 'File Name (e.g., MP3 title, DOCX metadata)' : isSensitive ? 'Potentially Sensitive Data' : '';
-        return `<span class="${className}" title="${title}" data-index="${i + j}">${hexByte}</span>`;
-      })
+      .map(b => b.toString(16).padStart(2, '0').toUpperCase())
       .join(' ');
     const asciiRow = Array.from(rowBytes)
       .map((b, j) => {
@@ -331,40 +357,64 @@ function displayHex(buffer, sensitiveRanges, fileNameRanges) {
     asciiLines.push(asciiRow);
   }
 
-  hexViewer.innerHTML = hexLines.join('<br>');
+  hexViewer.value = hexLines.join('\n');
+  asciiViewer.innerHTML = asciiLines.join('<br>');
+}
+
+// Update ASCII viewer based on hex input
+function updateAsciiViewer() {
+  const hex = hexViewer.value.replace(/\s+/g, '');
+  if (!/^[0-9A-Fa-f]*$/.test(hex) || hex.length % 2 !== 0) {
+    return; // Don't update ASCII if hex is invalid
+  }
+  const bytes = hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16));
+  const bytesPerRow = 16;
+  let asciiLines = [];
+
+  for (let i = 0; i < bytes.length; i += bytesPerRow) {
+    const rowBytes = bytes.slice(i, i + bytesPerRow);
+    const asciiRow = rowBytes
+      .map((b, j) => {
+        const char = (b >= 32 && b <= 126) ? String.fromCharCode(b) : '.';
+        const isFileName = fileNameRanges.some(([start, end]) => i + j >= start && i + j <= end);
+        const isSensitive = sensitiveRanges.some(([start, end]) => i + j >= start && i + j <= end);
+        const className = isFileName ? 'bg-orange-400 dark:bg-orange-600' : isSensitive ? 'bg-yellow-200 dark:bg-yellow-600' : '';
+        return `<span class="${className}" data-index="${i + j}">${char}</span>`;
+      })
+      .join('');
+    asciiLines.push(asciiRow);
+  }
+
   asciiViewer.innerHTML = asciiLines.join('<br>');
 }
 
 // Highlight single hex and ASCII position
 function highlightHexPosition(pos) {
-  const hexSpans = hexViewer.querySelectorAll('span');
   const asciiSpans = asciiViewer.querySelectorAll('span');
-  if (pos < hexSpans.length) {
-    const hexSpan = hexSpans[pos];
+  if (pos < asciiSpans.length) {
     const asciiSpan = asciiSpans[pos];
     const range = document.createRange();
-    range.selectNodeContents(hexSpan);
+    range.selectNodeContents(asciiSpan);
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
-    hexSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     asciiSpan.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    hexViewer.scrollTop = asciiViewer.scrollTop; // Keep scroll synchronized
   }
 }
 
 // Highlight hex and ASCII range
 function highlightHexRange(start, end) {
-  const hexSpans = hexViewer.querySelectorAll('span');
   const asciiSpans = asciiViewer.querySelectorAll('span');
-  if (start < hexSpans.length && end < hexSpans.length && start <= end) {
+  if (start < asciiSpans.length && end < asciiSpans.length && start <= end) {
     const range = document.createRange();
-    range.setStartBefore(hexSpans[start]);
-    range.setEndAfter(hexSpans[end]);
+    range.setStartBefore(asciiSpans[start]);
+    range.setEndAfter(asciiSpans[end]);
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
-    hexSpans[start].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     asciiSpans[start].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    hexViewer.scrollTop = asciiViewer.scrollTop; // Keep scroll synchronized
   }
 }
 
@@ -449,6 +499,57 @@ async function generateSectionRanges(file, buffer, ext) {
   }
   
   return ranges.filter(r => r.range || ['File Name', 'Extension', 'Encoding', 'Created Date/Time', 'Last Modified Date/Time', 'Hidden', 'Locked', 'Deleted'].includes(r.name));
+}
+
+// Update pie chart
+function updatePieChart() {
+  if (!fileBuffer) return;
+
+  const fileNameBytes = fileNameRanges.reduce((sum, [start, end]) => sum + (end - start + 1), 0);
+  const headerBytes = headerRanges.reduce((sum, [start, end]) => sum + (end - start + 1), 0);
+  const metadataBytes = sensitiveRanges.reduce((sum, [start, end]) => sum + (end - start + 1), 0);
+  const contentBytes = sectionRanges.find(r => r.name === 'Content')?.range
+    ? sectionRanges.find(r => r.name === 'Content').range[1] - sectionRanges.find(r => r.name === 'Content').range[0] + 1
+    : fileBuffer.length - headerBytes - fileNameBytes - metadataBytes;
+  const unknownBytes = fileBuffer.length - (fileNameBytes + headerBytes + metadataBytes + contentBytes);
+
+  const data = {
+    labels: ['File Name', 'Headers', 'Metadata', 'Content', 'Unknown'],
+    datasets: [{
+      data: [fileNameBytes, headerBytes, metadataBytes, contentBytes, unknownBytes],
+      backgroundColor: [
+        'rgb(255, 165, 0)', // Orange
+        'rgb(173, 216, 230)', // Blue
+        'rgb(255, 255, 224)', // Yellow
+        'rgb(144, 238, 144)', // Green
+        'rgb(200, 200, 200)' // Gray
+      ],
+      borderColor: document.getElementById('html-root').classList.contains('dark') ? '#4b5563' : '#d1d5db',
+      borderWidth: 1
+    }]
+  };
+
+  if (pieChartInstance) {
+    pieChartInstance.data = data;
+    pieChartInstance.update();
+  } else {
+    pieChartInstance = new Chart(dataPieChart, {
+      type: 'pie',
+      data: data,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: document.getElementById('html-root').classList.contains('dark') ? '#f9fafb' : '#111827'
+            }
+          }
+        }
+      }
+    });
+  }
 }
 
 // Initialize scrubber
@@ -581,7 +682,7 @@ async function parseDocxMetadata(file, buffer) {
         created: xml.querySelector('created')?.textContent,
         modified: xml.querySelector('modified')?.textContent
       };
-      return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: UTF-8 (XML)<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.created || 'N/A'}<br>Note: File name may be stored in docProps/core.xml (bytes 0-500, highlighted in orange in Hex Viewer).`;
+      return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: UTF-8 (XML)<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>Creator: ⚠️ ${props.creator || 'N/A'}<br>Last Modified By: ⚠️ ${props.lastModifiedBy || 'N/A'}<br>Created: ${props.created || 'N/A'}<br>Modified: ${props.modified || 'N/A'}<br>Note: File name may be stored in docProps/core.xml (bytes 0-500, highlighted in orange in Hex Viewer).`;
     }
     return `File Name: ⚠️ ${name}<br>Extension: ${ext}<br>Encoding: N/A<br>Created Date/Time: ${formatDate(file.lastModified)}<br>Last Modified Date/Time: ${formatDate(file.lastModified)}<br>Hidden: N/A (file system metadata, not accessible via File API)<br>Locked: N/A (file system metadata, not accessible via File API)<br>Deleted: N/A (not applicable for uploaded files)<br>Size: ${file.size} bytes<br>Type: ${file.type}<br>No detailed metadata available.<br>Note: File name and extension are stored in the file system.`;
   } catch (e) {

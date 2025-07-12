@@ -48,6 +48,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jschardet/2.3.0/jschardet.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='gray'/><rect x='4' y='4' width='8' height='8' fill='blue'/></svg>">
   <link href="./styles.css" rel="stylesheet">
 </head>
@@ -63,7 +64,7 @@
         </svg>
       </button>
     </div>
-    <!-- Left Column: File Input, Graphical View, Metadata, Section Table -->
+    <!-- Left Column: File Input, Graphical View, Metadata, Section Table, Pie Chart -->
     <div class="space-y-4">
       <div class="bg-white dark:bg-gray-800 p-4 rounded shadow card">
         <h2 class="text-lg font-semibold mb-2">File Input</h2>
@@ -85,16 +86,24 @@
         <h2 class="text-lg font-semibold mb-2">File Sections</h2>
         <table id="sectionTable" class="border-collapse border w-full"></table>
       </div>
+      <div class="bg-white dark:bg-gray-800 p-4 rounded shadow card">
+        <h2 class="text-lg font-semibold mb-2">Data Type Breakdown</h2>
+        <canvas id="dataPieChart" class="w-full max-h-64"></canvas>
+      </div>
     </div>
     <!-- Right Column: Hex Viewer, Scrubber, Encryption, Binary Sample -->
     <div class="space-y-4">
       <div class="bg-white dark:bg-gray-800 p-4 rounded shadow card">
         <h2 class="text-lg font-semibold mb-2">Hex Viewer</h2>
         <div class="flex">
-          <div id="hexViewer" class="overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm flex-1"></div>
+          <textarea id="hexViewer" class="overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm flex-1" spellcheck="false"></textarea>
           <div id="asciiViewer" class="overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm w-1/4"></div>
         </div>
-        <button id="saveHex" class="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-400">Save Hex Changes</button>
+        <div class="flex gap-2 mt-2">
+          <button id="saveHex" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 dark:hover:bg-blue-400">Save Hex Changes</button>
+          <button id="downloadFile" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 dark:hover:bg-green-400 hidden">Download Modified File</button>
+        </div>
+        <div id="saveMessage" class="text-green-500 mt-2 hidden">Changes saved to buffer!</div>
       </div>
       <div class="bg-white dark:bg-gray-800 p-4 rounded shadow card">
         <h2 class="text-lg font-semibold mb-2">Scrubber</h2>

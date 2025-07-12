@@ -24,15 +24,16 @@
   @apply p-4 rounded-lg shadow bg-[var(--card-bg)] text-[var(--card-text)];
 }
 
-#hexViewerContainer {
-  @apply fixed top-16 left-0 right-0 bg-[var(--card-bg)] shadow p-4 z-10;
-}
-
 #hexViewer, #asciiViewer {
   @apply overflow-auto max-h-48 border p-2 bg-gray-100 dark:bg-gray-700 font-mono text-sm;
+  line-height: 1.5em; /* Ensure consistent row height */
 }
 
-#hexViewer span, #asciiViewer span {
+#hexViewer {
+  @apply resize-none; /* Prevent textarea resizing */
+}
+
+#asciiViewer span {
   @apply inline-block w-8 text-center;
 }
 
@@ -70,4 +71,12 @@
 
 .learn-more {
   @apply text-blue-500 hover:underline text-sm cursor-pointer;
+}
+
+#saveMessage {
+  @apply text-green-500 mt-2;
+}
+
+#dataPieChart {
+  @apply w-full max-h-64;
 }
