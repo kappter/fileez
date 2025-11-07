@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Forensics Lab</title>
+    <style>
+        :root {
+            --color-primary: #32b8c6;
+            --color-primary-hover: #2da4b2;
+            --color-background: #fcfcf9;
+            --color-surface: #fffffe;
+            --color-text: #13343b;
+            --color-text-secondary: #626c71;
+            --color-border: rgba(94, 82, 64, 0.2);
+            --color-success: #21808d;
+            --color-error: #c0152f;
+            --color-warning: #a84b2f;
+            --color-orange: #e68161;
+            --color-blue: #3b82f6;
+            --color-yellow: #f59e0b;
+            --color-green: #22c55e;
+            --color-gray: #9ca3af;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --color-background: #1f2121;
+                --color-surface: #262828;
+                --color-text: #f5f5f5;
+                --color-text-secondary: rgba(167, 169, 169, 0.7);
+                --color-border: rgba(119, 124, 124, 0.3);
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--color-background);
+            color: var(--color-text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 16px;
+            padding-bottom: 80px;
+        }
+
+        .header {
+            text-align: center;
+            padding: 24px 0;
+            border-bottom: 2px solid var(--color-border);
+            margin-bottom: 24px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .phase-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin: 16px 0;
+        }
+
+        .phase-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--color-border);
+            transition: all 0.3s;
+        }
+
+        .phase-dot.active {
+            background: var(--color-primary);
+            transform: scale(1.2);
+        }
+
+        .phase-dot.completed {
+            background: var(--color-success);
+        }
+
+        .phase-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .phase-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .card h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            width: 100%;
+        }
+
+        .btn:hover {
+            background: var(--color-primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--color-border);
+            color: var(--color-text);
+        }
+
+        .file-input-wrapper {
+            border: 2px dashed var(--color-border);
+            border-radius: 12px;
+            padding: 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .file-input-wrapper:hover {
+            border-color: var(--color-primary);
+            background: rgba(50, 184, 198, 0.05);
+        }
+
+        .file-input-wrapper input {
+            display: none;
+        }
+
+        .byte-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            margin: 16px 0;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 8px;
+            background: var(--color-background);
+            border-radius: 8px;
+        }
+
+        .byte-cell {
+            aspect-ratio: 1;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        .byte-cell:hover {
+            transform: scale(1.1);
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .byte-cell.signature { background: var(--color-blue); color: white; }
+        .byte-cell.filename { background: var(--color-orange); color: white; }
+        .byte-cell.metadata { background: var(--color-yellow); color: var(--color-text); }
+        .byte-cell.content { background: var(--color-green); color: white; }
+        .byte-cell.unknown { background: var(--color-gray); color: white; }
+        .byte-cell.selected { border: 3px solid var(--color-primary); }
+
+        .representation-view {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .rep-card {
+            background: var(--color-background);
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .rep-card h3 {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--color-text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .rep-card .value {
+            font-size: 20px;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+
+        .checklist {
+            list-style: none;
+        }
+
+        .checklist-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: var(--color-background);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .checklist-item:hover {
+            background: rgba(50, 184, 198, 0.1);
+        }
+
+        .checklist-item.completed {
+            background: rgba(33, 128, 141, 0.2);
+        }
+
+        .checkbox {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--color-border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .checklist-item.completed .checkbox {
+            background: var(--color-success);
+            border-color: var(--color-success);
+        }
+
+        .checkbox::after {
+            content: '✓';
+            color: white;
+            display: none;
+        }
+
+        .checklist-item.completed .checkbox::after {
+            display: block;
+        }
+
+        .selection-mode {
+            background: rgba(50, 184, 198, 0.1);
+            border: 2px solid var(--color-primary);
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+        }
+
+        .hint-box {
+            background: rgba(245, 158, 11, 0.1);
+            border-left: 4px solid var(--color-yellow);
+            padding: 12px;
+            margin: 12px 0;
+            border-radius: 4px;
+        }
+
+        .hint-box.hidden {
+            display: none;
+        }
+
+        .score-display {
+            text-align: center;
+            padding: 24px;
+        }
+
+        .score-circle {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--color-primary), var(--color-success));
+            color: white;
+        }
+
+        .report-section {
+            margin: 16px 0;
+        }
+
+        .report-item {
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+
+        .report-item.correct {
+            background: rgba(33, 128, 141, 0.1);
+            border-color: var(--color-success);
+        }
+
+        .report-item.incorrect {
+            background: rgba(192, 21, 47, 0.1);
+            border-color: var(--color-error);
+        }
+
+        .navigation {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--color-surface);
+            border-top: 1px solid var(--color-border);
+            padding: 12px 16px;
+            display: flex;
+            gap: 12px;
+            z-index: 100;
+        }
+
+        .file-info {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            margin-top: 8px;
+        }
+
+        .byte-details {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 12px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--color-border);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 16px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--color-primary);
+            transition: width 0.3s;
+        }
+
+        @media (min-width: 768px) {
+            .byte-grid {
+                grid-template-columns: repeat(16, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 File Forensics Lab</h1>
+            <p style="color: var(--color-text-secondary);">Dissect files and discover their hidden structure</p>
+            <div class="phase-indicator">
+                <div class="phase-dot active" data-phase="1"></div>
+                <div class="phase-dot" data-phase="2"></div>
+                <div class="phase-dot" data-phase="3"></div>
+                <div class="phase-dot" data-phase="4"></div>
+            </div>
+        </div>
+
+        <!-- Phase 1: Upload & Visual Discovery -->
+        <div class="phase-content active" id="phase1">
+            <div class="card">
+                <h2>Phase 1: Upload Your File</h2>
+                <p style="color: var(--color-text-secondary); margin-bottom: 16px;">
+                    Start your forensic investigation by uploading a file. Recommended: TXT, MP3, DOCX, PDF (under 100KB)
+                </p>
+                <div class="file-input-wrapper" onclick="document.getElementById('fileInput').click()">
+                    <div style="font-size: 48px; margin-bottom: 12px;">📁</div>
+                    <div><strong>Click to upload file</strong></div>
+                    <div class="file-info">Max size: 100KB</div>
+                    <input type="file" id="fileInput" accept=".txt,.mp3,.jpg,.jpeg,.png,.pdf,.docx">
+                </div>
+                <div id="filePreview"></div>
+            </div>
+        </div>
+
+        <!-- Phase 2: Byte Representation Learning -->
+        <div class="phase-content" id="phase2">
+            <div class="card">
+                <h2>Phase 2: Understanding Bytes</h2>
+                <p style="color: var(--color-text-secondary); margin-bottom: 16px;">
+                    Every file is made of bytes. Let's see how the same byte can be represented in different ways.
+                </p>
+                <div class="byte-grid" id="visualGrid"></div>
+                <div class="card" style="background: var(--color-background); margin-top: 16px;">
+                    <h3 style="font-size: 14px; margin-bottom: 12px;">Hover over any byte to see its representations:</h3>
+                    <div class="representation-view" id="repView">
+                        <div class="rep-card">
+                            <h3>Binary</h3>
+                            <div class="value" id="binaryVal">00000000</div>
+                        </div>
+                        <div class="rep-card">
+                            <h3>Decimal</h3>
+                            <div class="value" id="decimalVal">0</div>
+                        </div>
+                        <div class="rep-card">
+                            <h3>Hex</h3>
+                            <div class="value" id="hexVal">00</div>
+                        </div>
+                    </div>
+                    <div class="byte-details" id="byteDetails">
+                        <strong>Byte Position:</strong> <span id="bytePos">0</span><br>
+                        <strong>Character:</strong> <span id="byteChar">-</span><br>
+                        <strong>Section:</strong> <span id="byteSection">Unknown</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase 3: Forensic Hunt -->
+        <div class="phase-content" id="phase3">
+            <div class="card">
+                <h2>Phase 3: Forensic Investigation</h2>
+                <p style="color: var(--color-text-secondary); margin-bottom: 16px;">
+                    Find and mark the important parts of your file. Click bytes to select ranges!
+                </p>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                </div>
+                <ul class="checklist" id="checklist">
+                    <li class="checklist-item" data-task="signature">
+                        <div class="checkbox"></div>
+                        <div>
+                            <strong>Find File Signature</strong>
+                            <div class="file-info">The magic number that identifies the file type</div>
+                        </div>
+                    </li>
+                    <li class="checklist-item" data-task="filename">
+                        <div class="checkbox"></div>
+                        <div>
+                            <strong>Locate File Name</strong>
+                            <div class="file-info">Where is the file name stored in the binary data?</div>
+                        </div>
+                    </li>
+                    <li class="checklist-item" data-task="metadata">
+                        <div class="checkbox"></div>
+                        <div>
+                            <strong>Identify Metadata</strong>
+                            <div class="file-info">Timestamps, author info, or other properties</div>
+                        </div>
+                    </li>
+                    <li class="checklist-item" data-task="content">
+                        <div class="checkbox"></div>
+                        <div>
+                            <strong>Mark Content Boundary</strong>
+                            <div class="file-info">Where does the actual content begin?</div>
+                        </div>
+                    </li>
+                </ul>
+                <div id="selectionMode" style="display: none;">
+                    <div class="selection-mode">
+                        <strong>Selection Mode Active: <span id="currentTask"></span></strong>
+                        <p style="margin: 8px 0; font-size: 14px;">Click start and end bytes in the grid above</p>
+                        <button class="btn btn-secondary" onclick="cancelSelection()">Cancel</button>
+                    </div>
+                </div>
+                <div class="hint-box" id="hintBox">
+                    <strong>💡 Hint:</strong> <span id="hintText"></span>
+                    <div style="margin-top: 8px;">
+                        <button class="btn btn-secondary" style="width: auto; padding: 8px 16px; font-size: 12px;" onclick="showNextHint()">Show Another Hint</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase 4: Report -->
+        <div class="phase-content" id="phase4">
+            <div class="card">
+                <h2>Forensic Report</h2>
+                <div class="score-display">
+                    <div class="score-circle" id="scoreCircle">0%</div>
+                    <h3 id="scoreTitle">Great Work!</h3>
+                </div>
+                <div class="report-section" id="reportContent"></div>
+                <button class="btn" onclick="restartLab()">Start New Investigation</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="navigation">
+        <button class="btn btn-secondary" id="prevBtn" onclick="previousPhase()" style="display: none;">← Previous</button>
+        <button class="btn" id="nextBtn" onclick="nextPhase()">Start Investigation →</button>
+    </div>
+
+    <script>
+        let fileData = null;
+        let currentPhase = 1;
+        let fileBytes = [];
+        let fileStructure = {};
+        let selections = {};
+        let selectionMode = null;
+        let selectionStart = null;
+        let hintLevel = 0;
+
+        const hints = {
+            signature: [
+                "Look at the very first bytes of the file (bytes 0-3)",
+                "File signatures are also called 'magic numbers'",
+                "PDF starts with %PDF, PNG with 89 50 4E 47, MP3 with ID3 or FF FB"
+            ],
+            filename: [
+                "For MP3 files, check bytes 3-32 in the ID3 tag",
+                "For DOCX files, look in the first 500 bytes (it's in the ZIP structure)",
+                "TXT files don't store names in binary - they rely on the file system!"
+            ],
+            metadata: [
+                "Metadata often follows the file signature",
+                "Look for recognizable text patterns or timestamps",
+                "MP3 ID3 tags contain album, artist, and year information"
+            ],
+            content: [
+                "Content usually starts after headers and metadata",
+                "Look for where the structured data ends and raw content begins",
+                "In text files, content starts immediately; in complex files, it's after headers"
+            ]
+        };
+
+        document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.size > 100000) {
+                alert('File too large! Please use files under 100KB.');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                fileData = new Uint8Array(e.target.result);
+                fileBytes = Array.from(fileData);
+                analyzeFile(file);
+                showFilePreview(file);
+                document.getElementById('nextBtn').textContent = 'Next: View Bytes →';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function analyzeFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            fileStructure = {
+                name: file.name,
+                size: file.size,
+                type: ext,
+                sections: {}
+            };
+
+            // Detect file signature
+            const sig = fileBytes.slice(0, 4);
+            if (sig[0] === 0x89 && sig[1] === 0x50 && sig[2] === 0x4E && sig[3] === 0x47) {
+                fileStructure.sections.signature = { start: 0, end: 7, type: 'PNG Signature' };
+            } else if (sig[0] === 0xFF && sig[1] === 0xD8) {
+                fileStructure.sections.signature = { start: 0, end: 1, type: 'JPEG Signature' };
+            } else if (sig[0] === 0x25 && sig[1] === 0x50 && sig[2] === 0x44 && sig[3] === 0x46) {
+                fileStructure.sections.signature = { start: 0, end: 3, type: 'PDF Signature' };
+            } else if (sig[0] === 0x49 && sig[1] === 0x44 && sig[2] === 0x33) {
+                fileStructure.sections.signature = { start: 0, end: 2, type: 'MP3 ID3 Tag' };
+                fileStructure.sections.filename = { start: 3, end: 32, type: 'MP3 Title' };
+                fileStructure.sections.metadata = { start: 33, end: 128, type: 'ID3 Metadata' };
+            } else if (sig[0] === 0x50 && sig[1] === 0x4B) {
+                fileStructure.sections.signature = { start: 0, end: 3, type: 'ZIP/DOCX Signature' };
+                fileStructure.sections.filename = { start: 0, end: 500, type: 'DOCX Structure' };
+            }
+
+            // Default content section
+            const metaEnd = fileStructure.sections.metadata?.end || fileStructure.sections.signature?.end || 0;
+            fileStructure.sections.content = { start: metaEnd + 1, end: fileBytes.length - 1, type: 'Content' };
+        }
+
+        function showFilePreview(file) {
+            const preview = document.getElementById('filePreview');
+            preview.innerHTML = `
+                <div class="card" style="margin-top: 16px; background: var(--color-background);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 32px;">📄</div>
+                        <div style="flex: 1;">
+                            <strong>${file.name}</strong>
+                            <div class="file-info">${(file.size / 1024).toFixed(2)} KB • ${fileBytes.length} bytes</div>
+                        </div>
+                        <div style="color: var(--color-success); font-size: 24px;">✓</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderByteGrid() {
+            const grid = document.getElementById('visualGrid');
+            grid.innerHTML = '';
+            
+            const maxBytes = Math.min(fileBytes.length, 512); // Show first 512 bytes
+            
+            for (let i = 0; i < maxBytes; i++) {
+                const byte = fileBytes[i];
+                const cell = document.createElement('div');
+                cell.className = 'byte-cell ' + getByteClass(i);
+                cell.textContent = byte.toString(16).toUpperCase().padStart(2, '0');
+                cell.dataset.index = i;
+                
+                cell.addEventListener('mouseenter', () => showByteInfo(i, byte));
+                cell.addEventListener('click', () => handleByteClick(i));
+                
+                grid.appendChild(cell);
+            }
+        }
+
+        function getByteClass(index) {
+            for (const [key, section] of Object.entries(fileStructure.sections)) {
+                if (index >= section.start && index <= section.end) {
+                    return key;
+                }
+            }
+            return 'unknown';
+        }
+
+        function showByteInfo(index, byte) {
+            document.getElementById('binaryVal').textContent = byte.toString(2).padStart(8, '0');
+            document.getElementById('decimalVal').textContent = byte;
+            document.getElementById('hexVal').textContent = '0x' + byte.toString(16).toUpperCase().padStart(2, '0');
+            document.getElementById('bytePos').textContent = index;
+            document.getElementById('byteChar').textContent = (byte >= 32 && byte <= 126) ? String.fromCharCode(byte) : '·';
+            document.getElementById('byteSection').textContent = getByteClass(index).toUpperCase();
+        }
+
+        function handleByteClick(index) {
+            if (!selectionMode) return;
+
+            if (selectionStart === null) {
+                selectionStart = index;
+                document.querySelector(`[data-index="${index}"]`).classList.add('selected');
+            } else {
+                const start = Math.min(selectionStart, index);
+                const end = Math.max(selectionStart, index);
+                confirmSelection(selectionMode, start, end);
+                selectionStart = null;
+            }
+        }
+
+        function nextPhase() {
+            if (currentPhase === 1 && !fileData) {
+                alert('Please upload a file first!');
+                return;
+            }
+
+            if (currentPhase < 4) {
+                currentPhase++;
+                updatePhase();
+            }
+        }
+
+        function previousPhase() {
+            if (currentPhase > 1) {
+                currentPhase--;
+                updatePhase();
+            }
+        }
+
+        function updatePhase() {
+            // Hide all phases
+            document.querySelectorAll('.phase-content').forEach(p => p.classList.remove('active'));
+            document.getElementById(`phase${currentPhase}`).classList.add('active');
+
+            // Update dots
+            document.querySelectorAll('.phase-dot').forEach((dot, i) => {
+                dot.classList.remove('active', 'completed');
+                if (i + 1 === currentPhase) dot.classList.add('active');
+                if (i + 1 < currentPhase) dot.classList.add('completed');
+            });
+
+            // Update navigation
+            document.getElementById('prevBtn').style.display = currentPhase === 1 ? 'none' : 'block';
+            
+            if (currentPhase === 4) {
+                document.getElementById('nextBtn').style.display = 'none';
+                generateReport();
+            } else if (currentPhase === 3) {
+                document.getElementById('nextBtn').textContent = 'Generate Report →';
+            } else {
+                document.getElementById('nextBtn').style.display = 'block';
+                document.getElementById('nextBtn').textContent = currentPhase === 2 ? 'Start Hunt →' : 'Next →';
+            }
+
+            // Phase-specific actions
+            if (currentPhase === 2) {
+                renderByteGrid();
+            } else if (currentPhase === 3) {
+                renderByteGrid();
+                setupChecklistListeners();
+            }
+        }
+
+        function setupChecklistListeners() {
+            document.querySelectorAll('.checklist-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    if (this.classList.contains('completed')) return;
+                    const task = this.dataset.task;
+                    startSelection(task);
+                });
+            });
+        }
+
+        function startSelection(task) {
+            selectionMode = task;
+            hintLevel = 0;
+            document.getElementById('selectionMode').style.display = 'block';
+            document.getElementById('currentTask').textContent = task.toUpperCase();
+            document.getElementById('hintBox').classList.remove('hidden');
+            showNextHint();
+        }
+
+        function cancelSelection() {
+            selectionMode = null;
+            selectionStart = null;
+            document.getElementById('selectionMode').style.display = 'none';
+            document.querySelectorAll('.byte-cell.selected').forEach(c => c.classList.remove('selected'));
+        }
+
+        function showNextHint() {
+            if (!selectionMode || hintLevel >= hints[selectionMode].length) return;
+            document.getElementById('hintText').textContent = hints[selectionMode][hintLevel];
+            hintLevel++;
+        }
+
+        function confirmSelection(task, start, end) {
+            selections[task] = { start, end };
+            
+            const item = document.querySelector(`[data-task="${task}"]`);
+            item.classList.add('completed');
+            
+            cancelSelection();
+            updateProgress();
+            
+            // Auto-advance if all complete
+            const completed = Object.keys(selections).length;
+            if (completed === 4) {
+                setTimeout(() => {
+                    document.getElementById('nextBtn').click();
+                }, 500);
+            }
+        }
+
+        function updateProgress() {
+            const completed = Object.keys(selections).length;
+            const percentage = (completed / 4) * 100;
+            document.getElementById('progressFill').style.width = percentage + '%';
+        }
+
+        function generateReport() {
+            const results = [];
+            let correctCount = 0;
+
+            for (const [task, selection] of Object.entries(selections)) {
+                const expected = fileStructure.sections[task];
+                const correct = expected && 
+                    Math.abs(selection.start - expected.start) <= 5 &&
+                    Math.abs(selection.end - expected.end) <= 10;
+                
+                if (correct) correctCount++;
+                
+                results.push({
+                    task,
+                    correct,
+                    selection,
+                    expected
+                });
+            }
+
+            const score = Math.round((correctCount / 4) * 100);
+            document.getElementById('scoreCircle').textContent = score + '%';
+            
+            const reportContent = document.getElementById('reportContent');
+            reportContent.innerHTML = results.map(r => `
+                <div class="report-item ${r.correct ? 'correct' : 'incorrect'}">
+                    <strong>${r.correct ? '✓' : '✗'} ${r.task.toUpperCase()}</strong>
+                    <div class="file-info">
+                        Your selection: Bytes ${r.selection.start}-${r.selection.end}
+                        ${r.expected ? `<br>Actual location: Bytes ${r.expected.start}-${r.expected.end}` : '<br>Not applicable to this file type'}
+                    </div>
+                </div>
+            `).join('');
+
+            if (score >= 75) {
+                document.getElementById('scoreTitle').textContent = 'Excellent Work! 🎉';
+            } else if (score >= 50) {
+                document.getElementById('scoreTitle').textContent = 'Good Effort! 👍';
+            } else {
+                document.getElementById('scoreTitle').textContent = 'Keep Learning! 📚';
+            }
+        }
+
+        function restartLab() {
+            currentPhase = 1;
+            fileData = null;
+            fileBytes = [];
+            selections = {};
+            selectionMode = null;
+            selectionStart = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('filePreview').innerHTML = '';
+            document.getElementById('nextBtn').textContent = 'Start Investigation →';
+            updatePhase();
+        }
+    </script>
+</body>
+</html>
