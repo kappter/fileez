@@ -1,1 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Map Starter</title>
+  <link rel="stylesheet" href="style.css" />
 
+  <!-- Libraries loaded from CDN for easy GitHub Pages deployment -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <h1>Project Map</h1>
+      <p>Upload a ZIP file and explore its folders and files as an interactive node map.</p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel upload-panel">
+      <h2>1. Upload Project ZIP</h2>
+
+      <label class="drop-zone" for="zipInput">
+        <input type="file" id="zipInput" accept=".zip" />
+        <span class="drop-title">Choose or drop a ZIP file</span>
+        <span class="drop-subtitle">Your file is processed locally in the browser.</span>
+      </label>
+
+      <div class="controls">
+        <button id="resetBtn" type="button">Reset View</button>
+        <button id="collapseBtn" type="button">Collapse Folders</button>
+      </div>
+
+      <div class="legend">
+        <h3>Legend</h3>
+        <div><span class="dot folder"></span> Folder</div>
+        <div><span class="dot code"></span> Code</div>
+        <div><span class="dot image"></span> Image</div>
+        <div><span class="dot doc"></span> Document</div>
+        <div><span class="dot other"></span> Other</div>
+      </div>
+    </section>
+
+    <section class="graph-panel">
+      <div id="emptyState" class="empty-state">
+        <h2>No project loaded yet</h2>
+        <p>Upload a ZIP file to generate your project map.</p>
+      </div>
+      <svg id="graph"></svg>
+    </section>
+
+    <aside class="panel inspector-panel">
+      <h2>2. Inspector</h2>
+      <div id="stats" class="stats">
+        <p><strong>Files:</strong> 0</p>
+        <p><strong>Folders:</strong> 0</p>
+        <p><strong>Total Size:</strong> 0 KB</p>
+      </div>
+
+      <hr />
+
+      <div id="inspector">
+        <p>Select a node to view details.</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <p>Starter concept: ZIP → folder/file tree → interactive graph.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
